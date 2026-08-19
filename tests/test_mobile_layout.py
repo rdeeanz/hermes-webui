@@ -1039,18 +1039,60 @@ def test_100dvh_viewport_height():
         "style.css must use 100dvh for correct mobile viewport height (100vh hides content under address bar)"
 
 
-def test_viewport_disables_page_zoom_for_native_pwa_shell():
-    """Installed PWA launches should not rubber-band into browser-style page zoom."""
-    assert 'name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"' in HTML
+def test_viewport_allows_zoom_in_a_browser_tab():
+    """Pinch-zoom must work in an ordinary tab.
+
+    The markup used to ship `maximum-scale=1, user-scalable=no` unconditionally.
+    That is right for an installed PWA — which otherwise rubber-bands like a web
+    page instead of behaving like an app — but in a browser tab it is a WCAG 2.1
+    SC 1.4.4 failure, and it bites hardest exactly where this app is hardest to
+    read: a wide code block on a phone.
+    """
+    assert 'name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"' in HTML, (
+        "the static viewport meta must not block zoom"
+    )
 
 
-def test_pwa_safe_area_top_stays_scoped_to_installed_modes():
-    """The PWA shell should not opt into cover-mode geometry for every browser surface."""
-    assert 'viewport-fit=cover' not in HTML
+def test_installed_shell_still_locks_zoom():
+    """The locked viewport is re-applied at runtime, and only when standalone."""
+    pwa_js = (REPO / "static" / "pwa-startup.js").read_text(encoding="utf-8")
+    assert "syncViewportZoom" in pwa_js, (
+        "pwa-startup.js must re-apply the locked viewport for installed launches"
+    )
+    assert "user-scalable=no" in pwa_js, "the standalone variant must still lock zoom"
+    assert "VIEWPORT_BROWSER" in pwa_js and "user-scalable=no" not in pwa_js.split(
+        "VIEWPORT_BROWSER="
+    )[1].split("\n")[0], "the browser variant must not lock zoom"
+
+
+def test_viewport_opts_into_cover_so_safe_area_insets_resolve():
+    """env(safe-area-inset-*) is always 0 without viewport-fit=cover.
+
+    style.css was already written against the insets — `max(10px,
+    env(safe-area-inset-left, 0))` and friends — but with no cover-mode opt-in
+    every one of them silently collapsed to its fallback. On a notched phone in
+    landscape that meant content ran under the cutout.
+    """
+    assert "viewport-fit=cover" in HTML
     assert 'apple-mobile-web-app-status-bar-style" content="black-translucent"' in HTML
+    # The top inset stays scoped to installed modes: in a browser tab the browser's
+    # own chrome already occupies that strip, so applying it would double-pad.
     assert "@media (display-mode: standalone), (display-mode: fullscreen)" in CSS
     assert "--app-titlebar-safe-top:env(safe-area-inset-top" in CSS
-    assert "--app-safe-bottom:" not in CSS
+
+
+def test_composer_clears_the_home_indicator():
+    """Cover mode puts the home indicator inside the viewport."""
+    compact = "\n".join(_max_width_media_blocks(640))
+    assert "env(safe-area-inset-bottom" in compact, (
+        "the composer must reserve the home-indicator inset now that the page "
+        "opts into viewport-fit=cover, or the send button sits underneath it"
+    )
+    assert "max(var(--keyboard-bottom-inset, 0px), env(safe-area-inset-bottom, 0px))" in compact, (
+        "take the LARGER of the keyboard and home-indicator insets, never the sum: "
+        "iOS reports safe-area-inset-bottom as 0 while the keyboard is up, so "
+        "adding them would leave a visible gap above the keyboard"
+    )
 
 
 def test_titlebar_safe_area_top_uses_scoped_variable():
@@ -1079,8 +1121,11 @@ def test_safe_area_variables_available_for_pwa_shell():
     assert "--app-titlebar-safe-top:env(safe-area-inset-top" in CSS, (
         "CSS must expose env(safe-area-inset-top) through --app-titlebar-safe-top"
     )
-    assert "padding:8px 10px calc(12px + var(--keyboard-bottom-inset, 0px))!important" in CSS, (
-        "Phone composer should keep the proven pre-cover-mode padding contract"
+    # The composer's bottom padding gained the home-indicator inset when the page
+    # opted into viewport-fit=cover (see test_composer_clears_the_home_indicator).
+    # The keyboard inset is still the other half of the contract.
+    assert "padding:8px 10px calc(12px + max(var(--keyboard-bottom-inset, 0px), env(safe-area-inset-bottom, 0px)))!important" in CSS, (
+        "Phone composer must keep the keyboard inset in its bottom padding"
     )
 
 

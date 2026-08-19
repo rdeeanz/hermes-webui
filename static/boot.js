@@ -3970,3 +3970,171 @@ function _showServerStopped() {
   var stoppedMsg = (typeof t === 'function' ? t('settings_shutdown_stopped_message') : 'Server stopped. You can close this tab.');
   document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:var(--muted);font-family:var(--font-ui);font-size:14px"><p>' + stoppedMsg + '</p></div>';
 }
+
+// ── Bottom sheet controller ──────────────────────────────────────────────────
+//
+// Presents an element as a bottom sheet at phone width and leaves it as whatever
+// popover it already was above --bp-phone. Call sites do not branch on viewport:
+// they call present()/dismiss() and this decides how to draw it.
+//
+// The motivating case is saved prompts, which was hidden outright below 640px
+// because its anchored 280px popover cannot fit a phone screen — the feature was
+// simply unreachable there. A sheet is the presentation that fits, so features
+// can be re-homed instead of dropped.
+//
+// Behaviour on a phone: backdrop, swipe-down to dismiss, tap-outside to dismiss,
+// Escape to dismiss, focus trapped inside while open, and focus returned to the
+// opener afterwards.
+(function(){
+  'use strict';
+
+  var FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),' +
+                  'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  var _open = null;          // { el, opener, onKey, onBackdrop, pointer handlers }
+  var _backdrop = null;
+
+  function _sheetMode(){
+    // Same predicate the CSS uses; see the BP contract at the top of this file.
+    return typeof _isPhoneWidthViewport === 'function' ? _isPhoneWidthViewport() : false;
+  }
+
+  function _ensureBackdrop(){
+    if(_backdrop && _backdrop.isConnected) return _backdrop;
+    _backdrop = document.createElement('div');
+    _backdrop.className = 'mobile-sheet-backdrop';
+    document.body.appendChild(_backdrop);
+    return _backdrop;
+  }
+
+  function _focusables(el){
+    return Array.prototype.filter.call(el.querySelectorAll(FOCUSABLE), function(n){
+      return n.offsetParent !== null || n === document.activeElement;
+    });
+  }
+
+  function _trap(e){
+    if(!_open || e.key !== 'Tab') return;
+    var items = _focusables(_open.el);
+    if(!items.length) return;
+    var first = items[0], last = items[items.length - 1];
+    if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  }
+
+  function _onKey(e){
+    if(!_open) return;
+    if(e.key === 'Escape'){ e.stopPropagation(); dismiss(_open.el); return; }
+    _trap(e);
+  }
+
+  // Swipe-down to dismiss. Only starts when the sheet is already scrolled to the
+  // top, so a downward drag inside a scrolled list scrolls the list instead of
+  // fighting it for the gesture.
+  function _attachDrag(el){
+    var startY = 0, dy = 0, dragging = false;
+    function down(e){
+      if(el.scrollTop > 0) return;
+      startY = e.touches ? e.touches[0].clientY : e.clientY;
+      dy = 0; dragging = true;
+      el.classList.add('sheet-dragging');
+    }
+    function move(e){
+      if(!dragging) return;
+      var y = e.touches ? e.touches[0].clientY : e.clientY;
+      dy = Math.max(0, y - startY);
+      el.style.transform = 'translateY(' + dy + 'px)';
+    }
+    function up(){
+      if(!dragging) return;
+      dragging = false;
+      el.classList.remove('sheet-dragging');
+      el.style.transform = '';
+      // A short flick should not close it; roughly a third of the sheet's own
+      // height is the usual threshold and scales with content.
+      if(dy > Math.max(80, el.getBoundingClientRect().height / 3)) dismiss(el);
+    }
+    el.addEventListener('touchstart', down, {passive:true});
+    el.addEventListener('touchmove', move, {passive:true});
+    el.addEventListener('touchend', up);
+    el.addEventListener('touchcancel', up);
+    return function detach(){
+      el.removeEventListener('touchstart', down);
+      el.removeEventListener('touchmove', move);
+      el.removeEventListener('touchend', up);
+      el.removeEventListener('touchcancel', up);
+    };
+  }
+
+  // Show `el`. On a phone that means a bottom sheet; anywhere else it just makes
+  // the element visible and lets its existing popover CSS position it.
+  function present(el, opts){
+    if(!el) return false;
+    opts = opts || {};
+    if(_open && _open.el !== el) dismiss(_open.el);
+
+    if(!_sheetMode()){
+      el.style.display = opts.display || 'flex';
+      return false;
+    }
+
+    el.setAttribute('data-mobile-sheet', '');
+    el.style.display = 'flex';
+    el.classList.add('sheet-open', 'sheet-enter');
+    // Next frame: drop `sheet-enter` so the transform transition runs from
+    // off-screen to rest instead of the sheet simply appearing in place.
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){ el.classList.remove('sheet-enter'); });
+    });
+
+    var backdrop = _ensureBackdrop();
+    backdrop.classList.add('visible');
+    var onBackdrop = function(){ dismiss(el); };
+    backdrop.addEventListener('click', onBackdrop);
+
+    var detachDrag = _attachDrag(el);
+    document.addEventListener('keydown', _onKey, true);
+
+    _open = { el: el, opener: (opts.opener || document.activeElement), onBackdrop: onBackdrop, detachDrag: detachDrag };
+
+    var items = _focusables(el);
+    if(items.length) items[0].focus();
+    else { el.setAttribute('tabindex', '-1'); el.focus(); }
+    return true;
+  }
+
+  function dismiss(el){
+    el = el || (_open && _open.el);
+    if(!el) return;
+    el.classList.remove('sheet-open', 'sheet-enter', 'sheet-dragging');
+    el.style.transform = '';
+    el.style.display = 'none';
+    if(_open && _open.el === el){
+      if(_backdrop){
+        _backdrop.classList.remove('visible');
+        if(_open.onBackdrop) _backdrop.removeEventListener('click', _open.onBackdrop);
+      }
+      if(_open.detachDrag) _open.detachDrag();
+      document.removeEventListener('keydown', _onKey, true);
+      var opener = _open.opener;
+      _open = null;
+      // Return focus so keyboard and screen-reader users are not dumped at the
+      // top of the document.
+      if(opener && typeof opener.focus === 'function' && opener.isConnected){
+        try{ opener.focus(); }catch(_){ }
+      }
+    }
+  }
+
+  function isOpen(el){
+    if(!_open) return false;
+    return el ? _open.el === el : true;
+  }
+
+  // A rotation or a window resize can cross the phone boundary while a sheet is
+  // open, which would leave a stranded backdrop over a desktop popover.
+  window.addEventListener('resize', function(){
+    if(_open && !_sheetMode()) dismiss(_open.el);
+  });
+
+  window.HermesSheet = { present: present, dismiss: dismiss, isOpen: isOpen, isSheetMode: _sheetMode };
+})();

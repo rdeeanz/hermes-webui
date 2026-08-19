@@ -2,7 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!-- Zoom stays ENABLED in an ordinary browser tab. `user-scalable=no` blocks
+       pinch-zoom, which is a WCAG 2.1 SC 1.4.4 failure and hurts most where this
+       app hurts most: reading a wide code block on a phone. The installed PWA
+       shell still wants it off, so pwa-startup.js re-applies the locked variant
+       when (and only when) the app is running standalone.
+
+       `viewport-fit=cover` is required for env(safe-area-inset-*) to resolve to
+       anything. Without it, every `max(10px, env(safe-area-inset-left, 0))` in
+       style.css silently collapsed to its 10px fallback, so the safe-area work
+       that was already written never actually applied in browser mode — visible
+       in landscape on a notched phone, where content ran under the cutout. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hermes</title>
 <!-- base href enables subpath mount support; all static paths must stay relative (no leading slash).
      MUST appear before manifest/favicon links so browsers resolve relative URLs against the
@@ -757,6 +768,19 @@
             <button class="composer-mobile-config-action" id="composerMobileReasoningAction" type="button" onclick="toggleReasoningDropdown()" title="Reasoning effort level" style="display:none">
               <span class="composer-reasoning-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg></span>
               <span class="composer-mobile-config-copy"><span class="composer-mobile-config-kicker" data-i18n="composer_mobile_reasoning">Reasoning</span><span class="composer-mobile-config-value" id="composerMobileReasoningLabel"></span></span>
+            </button>
+            <!-- Phone-only entry points for affordances the composer footer has no
+                 room for. Previously these were simply `display:none` below 640px,
+                 which made them unreachable on a phone rather than relocated. They
+                 open the same surfaces the desktop controls open, presented as
+                 bottom sheets. -->
+            <button class="composer-mobile-config-action" id="composerMobileSavedPromptsAction" type="button" onclick="toggleSavedPromptsPopup()" title="Saved prompts" data-i18n-title="composer_control_saved_prompts" aria-label="Saved prompts" data-i18n-aria-label="composer_control_saved_prompts" aria-haspopup="menu" aria-expanded="false" aria-controls="savedPromptsPopup">
+              <span class="composer-model-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+              <span class="composer-mobile-config-copy"><span class="composer-mobile-config-kicker" data-i18n="composer_control_saved_prompts">Saved prompts</span></span>
+            </button>
+            <button class="composer-mobile-config-action" id="composerMobileOutlineAction" type="button" onclick="toggleOutlinePanel()" title="Conversation outline" data-i18n-title="outline_toggle" aria-label="Conversation outline" data-i18n-aria-label="outline_toggle">
+              <span class="composer-model-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
+              <span class="composer-mobile-config-copy"><span class="composer-mobile-config-kicker" data-i18n="outline_toggle">Outline</span></span>
             </button>
             <div class="composer-mobile-config-action composer-mobile-context-action" id="composerMobileContextAction" role="group" aria-label="Context window" style="display:none">
               <span class="composer-mobile-config-copy composer-mobile-context-copy">

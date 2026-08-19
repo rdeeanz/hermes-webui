@@ -2464,7 +2464,18 @@
      affordance where it has room and a pointer. */
   @media (max-width: 640px){
     .markdown-table-sort{display:inline;width:auto;gap:0;min-height:0;}
+    /* Hidden by DEFAULT, not always. The regression this rule was written for was
+       reserved glyph width in every header making narrow columns wrap; a column
+       that is actually sorted has no such cost, and hiding the arrow there left
+       mobile users able to sort but unable to see which column and direction were
+       active. Show it only for the sorted column. */
     .markdown-table-sort-indicator{display:none;}
+    .msg-body th[aria-sort="ascending"] .markdown-table-sort-indicator,
+    .msg-body th[aria-sort="descending"] .markdown-table-sort-indicator{display:inline;margin-left:2px;}
+    /* The filter input stays desktop/tablet-only: it is a text field rendered into
+       the header area, and that is precisely what made narrow headers wrap. Giving
+       it a phone home means a new surface (a per-table sheet), which is a design
+       change rather than a fix — tracked as remaining work. */
     .markdown-table-filter{display:none;}
   }
   /* #486: inline code inside table cells needs scaled sizing to avoid overflow/clipping */
@@ -3078,7 +3089,7 @@
   .composer-footer.cf-icons #composerModelLabel{display:none;}
   .composer-footer.cf-icons .composer-model-chip{max-width:none;padding-left:10px;padding-right:8px;gap:4px;}
   .composer-footer.cf-icons #btnSavedPrompts,
-  .composer-footer.cf-icons .saved-prompts-popup{display:none!important;}
+  .composer-footer.cf-icons .saved-prompts-popup:not(.sheet-open){display:none!important;}
   .composer-footer.cf-icons .composer-divider{display:none;}
 
   .composer-footer.cf-burger .composer-left{gap:8px;}
@@ -3171,7 +3182,13 @@
     .messages-inner{padding:12px 10px 20px;max-width:100%;overflow-x:clip;word-break:break-word;min-width:0;padding-left:max(10px,env(safe-area-inset-left,0));padding-right:max(10px,env(safe-area-inset-right,0));}
     .msg-body{padding-left:0;max-width:100%;}
     .msg-role{font-size:12px;}
-    .composer-wrap{padding:8px 10px calc(12px + var(--keyboard-bottom-inset, 0px))!important;padding-left:max(10px,env(safe-area-inset-left,0))!important;padding-right:max(10px,env(safe-area-inset-right,0))!important;}
+    /* Bottom padding takes the LARGER of the keyboard inset and the home-indicator
+       inset, never their sum. Now that the page opts into viewport-fit=cover the
+       home indicator overlaps the viewport, so without this the send button sits
+       under it. iOS reports safe-area-inset-bottom as 0 while the keyboard is up
+       (the keyboard already occupies that strip), so max() is exactly right and
+       adding them would leave a visible gap above the keyboard. */
+    .composer-wrap{padding:8px 10px calc(12px + max(var(--keyboard-bottom-inset, 0px), env(safe-area-inset-bottom, 0px)))!important;padding-left:max(10px,env(safe-area-inset-left,0))!important;padding-right:max(10px,env(safe-area-inset-right,0))!important;}
     .composer-box{border-radius:12px;}
     .composer-box textarea{min-height:40px;}
     .composer-footer{padding:6px 8px 8px!important;gap:6px;flex-wrap:nowrap;align-items:center;}
@@ -3202,9 +3219,12 @@
     .composer-left > .composer-model-wrap,
     .composer-left > .composer-reasoning-wrap,
     .composer-left > .composer-toolsets-wrap{display:none!important;}
-    /* Saved prompts is a desktop-only composer affordance — too much for the
-       narrow mobile composer (Nathan 2026-06-09). Hide the button + popup. */
-    #btnSavedPrompts,.saved-prompts-popup{display:none!important;}
+    /* Saved prompts used to be hidden outright on phones — the 280px anchored
+       popover genuinely does not fit, so the feature was simply unreachable
+       there. It presents as a bottom sheet now (see the primitive above), so the
+       button stays; only the desktop popover geometry is suppressed. */
+    #btnSavedPrompts{display:inline-flex!important;width:44px;height:44px;min-width:44px;min-height:44px;}
+    .saved-prompts-popup:not(.sheet-open){display:none!important;}
     .composer-mobile-config-btn{box-sizing:border-box;position:relative;display:inline-flex!important;width:44px;height:44px;min-width:44px;min-height:44px;flex-shrink:0;}
     .composer-mobile-config-panel.open{display:flex;}
     .composer-mobile-config-action{box-sizing:border-box;flex:1 1 0;min-height:44px;min-width:0;background:var(--input-bg);border-color:var(--border);}
@@ -5864,6 +5884,74 @@ main.main > #mainPlugin{display:none;}
 .session-project-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block;}
 
 /* ── Saved prompts popup ── */
+/* ── Bottom sheet primitive ───────────────────────────────────────────────────
+   One presentation, two form factors. An element marked `data-mobile-sheet`
+   keeps whatever desktop popover styling it already has above --bp-phone, and
+   becomes a bottom sheet at phone width. Nothing about the element's content or
+   its open/close call sites changes — only where it is drawn.
+
+   This exists because the alternative kept losing features: the saved-prompts
+   popover is a 280px absolutely-positioned card anchored to the composer, which
+   genuinely does not work on a 375px screen, so it was simply hidden on phones
+   and the feature became unreachable there. A sheet is the presentation that
+   does work, so the feature can come back instead of being dropped.
+
+   Height is capped rather than fixed, so a two-item sheet is short and a long
+   one scrolls internally instead of growing the page. */
+.mobile-sheet-backdrop{
+  display:none;position:fixed;inset:0;z-index:2999;
+  background:rgba(0,0,0,.45);
+  -webkit-tap-highlight-color:transparent;
+  opacity:0;transition:opacity .2s ease;
+}
+.mobile-sheet-backdrop.visible{display:block;opacity:1;}
+
+@media(max-width:640px){
+  [data-mobile-sheet].sheet-open{
+    display:flex!important;
+    position:fixed!important;
+    left:0!important;right:0!important;bottom:0!important;top:auto!important;
+    width:100%!important;min-width:0!important;max-width:100%!important;
+    z-index:3000;
+    flex-direction:column;
+    /* Cap, don't fix: short content stays short. */
+    max-height:min(85dvh, 85vh)!important;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    border:1px solid var(--border);
+    border-bottom:none;
+    border-radius:16px 16px 0 0!important;
+    box-shadow:0 -8px 32px rgba(0,0,0,.32);
+    /* Clear the home indicator, and lift above the on-screen keyboard when the
+       sheet is opened from a focused composer. */
+    padding:20px 12px calc(16px + max(var(--keyboard-bottom-inset, 0px), env(safe-area-inset-bottom, 0px)))!important;
+    padding-left:max(12px,env(safe-area-inset-left,0))!important;
+    padding-right:max(12px,env(safe-area-inset-right,0))!important;
+    transform:translateY(0);
+    transition:transform .26s cubic-bezier(.22,1,.36,1);
+  }
+  /* Drag handle. Purely decorative — the whole sheet responds to the swipe, so
+     this is an affordance rather than the hit target. */
+  [data-mobile-sheet].sheet-open::before{
+    content:'';position:sticky;top:0;
+    align-self:center;flex:0 0 auto;
+    width:36px;height:4px;margin:-8px 0 12px;
+    border-radius:999px;background:var(--border2);
+  }
+  [data-mobile-sheet].sheet-enter{transform:translateY(100%);}
+  [data-mobile-sheet].sheet-dragging{transition:none;}
+  /* Sheet rows are tap targets, not hover rows. */
+  [data-mobile-sheet].sheet-open .saved-prompt-row,
+  [data-mobile-sheet].sheet-open [role="menuitem"]{min-height:44px;align-items:center;}
+  [data-mobile-sheet].sheet-open .saved-prompt-delete{min-width:44px;min-height:44px;}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .mobile-sheet-backdrop,
+  [data-mobile-sheet].sheet-open{transition:none!important;}
+}
+
 .saved-prompts-popup{position:absolute;bottom:calc(100% + 8px);left:0;min-width:280px;max-width:380px;max-height:320px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:200;flex-direction:column;gap:2px;padding:6px;}
 .saved-prompt-row{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;}
 .saved-prompt-row:hover{background:var(--hover-bg);}
@@ -7357,8 +7445,15 @@ html[data-conversation-outline="enabled"] #outlineToggleBtn:not([hidden]){displa
   100%{background:transparent;}
 }
 .outline-jump-flash{animation:outline-flash 1.2s ease-out forwards;}
+/* The floating outline rail is a desktop affordance: a 320px card pinned to the
+   right edge has nowhere to live on a phone. It used to be hidden below 900px
+   along with its toggle, which made the outline unreachable on mobile entirely.
+   The toggle stays hidden — the phone entry point is the composer's mobile
+   config panel — but the panel itself now presents as a bottom sheet, so only
+   its desktop geometry is suppressed. */
 @media(max-width:900px){
-  #outlineToggleBtn,#outlinePanelWrapper{display:none!important;}
+  #outlineToggleBtn{display:none!important;}
+  #outlinePanelWrapper:not(.sheet-open){display:none!important;}
 }
 
 /* Settings search */
