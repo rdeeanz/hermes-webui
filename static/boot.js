@@ -155,12 +155,42 @@ async function _finalizeComposerPrefillOnBoot(prefillIntent){
 // Mobile navigation.
 let _workspacePanelMode='closed'; // 'closed' | 'browse' | 'preview'
 
-function _isCompactWorkspaceViewport(){
-  return window.matchMedia('(max-width: 900px)').matches;
+// ── Responsive breakpoint contract (single source of truth) ──
+// Mirrors --bp-phone / --bp-tablet in static/style.css. CSS cannot read a custom
+// property from inside a media query, so the two numbers live in both files and
+// tests/test_breakpoint_contract.py fails if they ever drift apart.
+//
+//   <= PHONE  (640)  phone   : one column, sidebar drawer, right panel slide-over
+//   641..TABLET(1024) tablet : sidebar in-flow, right panel STILL slide-over
+//   >  TABLET (1024) desktop : three in-flow columns
+//
+// `isCompact` (phone OR tablet) is the predicate that decides whether app chrome
+// uses overlay semantics. It previously said 900px here while the slide-over CSS
+// stopped at 640px, which left the workspace panel unopenable between the two.
+const BP = Object.freeze({ PHONE: 640, TABLET: 1024 });
+
+function _mq(query){
+  try{ return window.matchMedia(query).matches; }catch(_){ return false; }
 }
 
+// Viewport is at most phone width.
 function _isPhoneWidthViewport(){
-  return window.matchMedia('(max-width: 640px)').matches;
+  return _mq(`(max-width: ${BP.PHONE}px)`);
+}
+
+// Viewport is in the tablet band (wider than a phone, narrower than desktop).
+function _isTabletWidthViewport(){
+  return _mq(`(min-width: ${BP.PHONE + 1}px) and (max-width: ${BP.TABLET}px)`);
+}
+
+// Viewport is wide enough for the full three-column in-flow layout.
+function _isDesktopWidthViewport(){
+  return _mq(`(min-width: ${BP.TABLET + 1}px)`);
+}
+
+// Phone OR tablet — anything that gets overlay chrome for the workspace panel.
+function _isCompactWorkspaceViewport(){
+  return !_isDesktopWidthViewport();
 }
 
 function _isTouchKeyboardViewport(){
@@ -518,8 +548,11 @@ _installPwaSidebarSwipeGesture();
 // State is persisted via localStorage and survives reloads + bfcache.
 const _SIDEBAR_COLLAPSED_KEY='hermes-webui-sidebar-collapsed';
 
+// NOTE: this is the *sidebar* boundary, not the three-column boundary — the
+// sidebar leaves drawer mode as soon as the viewport is wider than a phone, so
+// it keys off BP.PHONE. Use _isDesktopWidthViewport() for the layout boundary.
 function _isDesktopWidth(){
-  try{return window.matchMedia('(min-width:641px)').matches;}catch(_){return true;}
+  try{return window.matchMedia(`(min-width:${BP.PHONE + 1}px)`).matches;}catch(_){return true;}
 }
 
 function _isSidebarCollapsed(){

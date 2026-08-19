@@ -66,7 +66,7 @@ def _declarations(rule_body):
 
 
 def test_desktop_three_panel_contract_gives_main_readable_floor():
-    desktop = _media_block("min-width", 901, ".main{flex:1 1 420px;min-width:420px;}")
+    desktop = _media_block("min-width", 1025, ".main{flex:1 1 420px;min-width:420px;}")
     main = _declarations(_rule_body(desktop, ".main"))
 
     assert main.get("flex") == "1 1 420px"
@@ -74,7 +74,7 @@ def test_desktop_three_panel_contract_gives_main_readable_floor():
 
 
 def test_desktop_side_rails_can_shrink_to_resize_minima():
-    desktop = _media_block("min-width", 901, ".sidebar{flex-shrink:1;min-width:180px;}")
+    desktop = _media_block("min-width", 1025, ".sidebar{flex-shrink:1;min-width:180px;}")
     sidebar = _declarations(_rule_body(desktop, ".sidebar"))
     rightpanel = _declarations(_rule_body(desktop, ".rightpanel"))
     closed_rightpanel = _declarations(
@@ -96,39 +96,65 @@ def test_desktop_side_rails_can_shrink_to_resize_minima():
     assert collapsed_rightpanel.get("min-width") == "0 !important"
 
 
-def test_compact_breakpoint_900px_remains_hidden_right_panel_boundary():
-    assert "@media(max-width:900px)" in CSS or "@media (max-width: 900px)" in CSS
+def test_compact_breakpoint_shows_the_panel_toggle():
+    """Compact chrome exposes the Files button across phone AND tablet.
 
-    compact = _media_block("max-width", 900, ".rightpanel{display:none}")
-    rightpanel = _declarations(_rule_body(compact, ".rightpanel"))
+    Previously this block also carried `.rightpanel{display:none}` at 900px while
+    the slide-over rules stopped at 640px, so between 641 and 900px the button was
+    visible, its handler ran, and nothing appeared. The panel is now an overlay
+    across the whole compact band instead of being hidden — see
+    test_compact_band_turns_right_panel_into_a_slide_over below.
+    """
+    assert "@media(max-width:1024px)" in CSS or "@media (max-width: 1024px)" in CSS
+
+    compact = _media_block("max-width", 1024, ".workspace-panel-edge-toggle")
     workspace_toggle = _declarations(_rule_body(compact, ".workspace-toggle-btn"))
     mobile_files = _declarations(_rule_body(compact, ".mobile-files-btn"))
 
-    assert rightpanel.get("display") == "none"
     assert workspace_toggle.get("display") == "inline-flex!important"
     assert mobile_files.get("display") == "inline-flex!important"
 
 
-def test_mobile_slide_over_breakpoint_640px_remains_intact():
-    assert "@media(max-width:640px)" in CSS or "@media (max-width: 640px)" in CSS
-
-    mobile = _media_block("max-width", 640, ".rightpanel.mobile-open")
-    rightpanel = _declarations(_rule_body(mobile, ".rightpanel"))
-    rightpanel_open = _declarations(_rule_body(mobile, ".rightpanel.mobile-open"))
+def test_compact_band_turns_right_panel_into_a_slide_over():
+    """The slide-over must cover the whole compact band, not just phones."""
+    compact = _media_block("max-width", 1024, ".rightpanel.mobile-open")
+    rightpanel = _declarations(_rule_body(compact, ".rightpanel"))
+    rightpanel_open = _declarations(_rule_body(compact, ".rightpanel.mobile-open"))
 
     assert rightpanel.get("display") == "flex!important"
     assert rightpanel.get("position") == "fixed"
-    assert rightpanel.get("right") == "calc(-1 * var(--mobile-rightpanel-width))!important"
-    assert rightpanel.get("width") == "var(--mobile-rightpanel-width)!important"
+    assert rightpanel.get("right") == "calc(-1 * var(--overlay-w))!important"
+    assert rightpanel.get("width") == "var(--overlay-w)!important"
     assert rightpanel.get("box-shadow") == "none!important"
     assert rightpanel_open.get("right") == "0!important"
 
 
-def test_no_unmatched_desktop_hide_breakpoint_above_900():
-    hidden_widths = []
-    for width_px, block in _media_blocks("max-width"):
-        if re.search(r"\.rightpanel\s*\{\s*display\s*:\s*none", block):
-            hidden_widths.append(width_px)
+def test_phone_only_narrows_the_slide_over():
+    """A phone overrides the width token and inherits all the positioning."""
+    mobile = _media_block("max-width", 640, ".rightpanel{--overlay-w")
+    rightpanel = _declarations(_rule_body(mobile, ".rightpanel"))
 
-    assert 900 in hidden_widths
-    assert all(width_px <= 900 for width_px in hidden_widths)
+    assert rightpanel.get("--overlay-w") in ("min(300px, 100vw)", "min(300px,100vw)")
+    # Positioning must NOT be restated here — that duplication is what let the
+    # two bands drift apart in the first place.
+    assert "position" not in rightpanel
+    assert "right" not in rightpanel
+
+
+def test_right_panel_is_never_hidden_outright_on_any_narrow_viewport():
+    """Regression guard for the original defect.
+
+    No max-width media query may hide `.rightpanel`. Below the desktop boundary
+    it becomes an overlay; above it, it is in-flow and collapses to zero width.
+    Hiding it is what made the panel unreachable on tablets.
+    """
+    hidden_widths = [
+        width_px
+        for width_px, block in _media_blocks("max-width")
+        if re.search(r"\.rightpanel\s*\{\s*display\s*:\s*none", block)
+    ]
+
+    assert not hidden_widths, (
+        f".rightpanel is hidden outright at max-width {hidden_widths} — it must "
+        f"become a slide-over instead so the Files button always does something"
+    )

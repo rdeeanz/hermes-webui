@@ -42,6 +42,14 @@ def _max_width_media_blocks(width_px):
                     break
     return blocks
 
+def _block_containing(needle, width_px):
+    """Return the @media(max-width:<width_px>px) body that contains `needle`."""
+    for block in _max_width_media_blocks(width_px):
+        if needle in re.sub(r"\s+", "", block):
+            return block
+    raise AssertionError(f"no @media(max-width:{width_px}px) block contains {needle!r}")
+
+
 
 def _composer_phone_media_block():
     for block in _max_width_media_blocks(640):
@@ -169,14 +177,21 @@ class _ComposerLeftDropdownParser(HTMLParser):
 
 # ── Mobile breakpoint rules ───────────────────────────────────────────────────
 
-def test_mobile_breakpoint_900px_present():
-    """@media(max-width:900px) must hide the right panel and show mobile-files-btn."""
-    assert "@media(max-width:900px)" in CSS or "@media (max-width: 900px)" in CSS, \
-        "Missing @media(max-width:900px) breakpoint in style.css"
-    # Right panel should be hidden at 900px, replaced by slide-over
-    assert ".rightpanel{display:none" in CSS or ".rightpanel {display:none" in CSS or \
-           re.search(r'max-width:900px\).*?\.rightpanel\{display:none', CSS, re.DOTALL), \
-        ".rightpanel must be display:none at max-width:900px (slide-over replaces it)"
+def test_compact_breakpoint_present():
+    """The compact band must reach --bp-tablet and expose the Files button there.
+
+    This used to assert `.rightpanel{display:none}` at 900px. That was the bug:
+    hiding the panel while the slide-over rules stopped at 640px left the whole
+    641-900px band with a Files button that did nothing. The panel is now an
+    overlay across the entire compact band instead.
+    """
+    assert "@media(max-width:1024px)" in CSS or "@media (max-width: 1024px)" in CSS, \
+        "Missing @media(max-width:1024px) compact breakpoint in style.css"
+    compact_css = "\n".join(_max_width_media_blocks(1024)).replace(" ", "")
+    assert ".mobile-files-btn{display:inline-flex!important" in compact_css, \
+        "the compact band must expose the Files button"
+    assert ".rightpanel{display:none" not in compact_css, \
+        "the compact band must NOT hide the right panel — it becomes a slide-over"
 
 
 def test_mobile_breakpoint_640px_present():
@@ -216,26 +231,29 @@ def test_rightpanel_mobile_slide_over_css():
     assert ".rightpanel.mobile-open{right:0" in CSS or ".rightpanel.mobile-open {right:0" in CSS, \
         ".rightpanel.mobile-open must set right:0 to slide panel in from right"
     assert "min(300px, 100vw)" in CSS or "min(300px,100vw)" in CSS, \
-        "rightpanel mobile width should be capped defensively with 100vw"
-    assert "var(--mobile-rightpanel-width)" in CSS, \
-        "mobile rightpanel width variable should be used in compact mode rules"
-    assert "calc(-1 * var(--mobile-rightpanel-width))" in CSS, \
-        "closed mobile rightpanel should be off-canvas using a width-based negative offset"
-    mobile_640 = re.search(r'@media\(max-width:640px\)\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}', CSS, re.DOTALL)
-    assert mobile_640, "@media(max-width:640px) block missing from style.css"
-    rightpanel_block = mobile_640.group(1)
-    assert re.search(r'\.rightpanel\{[^}]*width:\s*var\(--mobile-rightpanel-width\)\s*!important',
+        "rightpanel phone width should be capped defensively with 100vw"
+    assert "var(--overlay-w)" in CSS, \
+        "the slide-over width token should be used in compact mode rules"
+    assert "calc(-1 * var(--overlay-w))" in CSS, \
+        "closed slide-over should be off-canvas using a width-based negative offset"
+    # The slide-over now lives in the shared compact band (<= --bp-tablet) rather
+    # than the phone-only block, so a tablet gets the same overlay instead of a
+    # Files button that does nothing. See tests/test_breakpoint_contract.py.
+    compact = re.search(r'@media\(max-width:1024px\)\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}', CSS, re.DOTALL)
+    assert compact, "@media(max-width:1024px) block missing from style.css"
+    rightpanel_block = _block_containing(".rightpanel.mobile-open", 1024)
+    assert re.search(r'\.rightpanel\{[^}]*width:\s*var\(--overlay-w\)\s*!important',
                      rightpanel_block, re.DOTALL), \
-        ".rightpanel width must use var(--mobile-rightpanel-width) with !important in mobile block"
+        ".rightpanel width must use var(--overlay-w) with !important in the compact block"
     assert re.search(r'\.rightpanel\.mobile-open\{[^}]*right:\s*0\s*!important',
                      rightpanel_block, re.DOTALL), \
-        "mobile-open mobile rightpanel must force right:0 with !important"
+        "mobile-open rightpanel must force right:0 with !important"
     assert re.search(r'\.rightpanel\{[^}]*box-shadow:\s*none\s*!important',
                      rightpanel_block, re.DOTALL), \
-        "closed mobile rightpanel should have no shadow to avoid right-edge bleed"
+        "closed slide-over should have no shadow to avoid right-edge bleed"
     assert re.search(r'\.rightpanel\{[^}]*padding-top:\s*var\(--app-titlebar-safe-top\)',
                      rightpanel_block, re.DOTALL), \
-        "mobile rightpanel should reserve the same PWA top inset as the titlebar"
+        "slide-over should reserve the same PWA top inset as the titlebar"
     assert re.search(r'\.rightpanel\{[^}]*box-sizing:\s*border-box',
                      rightpanel_block, re.DOTALL), \
         "mobile rightpanel safe-area padding must stay inside its fixed height"
@@ -575,12 +593,13 @@ def test_mobile_sidebar_opens_as_full_screen_surface_with_panel_rail():
 
 def test_compact_titlebar_keeps_hamburger_available():
     """Compact app chrome must keep the titlebar menu reachable."""
-    compact_css = "\n".join(_max_width_media_blocks(900))
+    compact_css = "\n".join(_max_width_media_blocks(1024))
     assert re.search(r'\.app-titlebar-hamburger,\s*\.app-titlebar-spacer\{[^}]*display:\s*flex', compact_css), (
         "Compact titlebar should expose the hamburger before true phone width"
     )
-    assert ".rightpanel{display:none}" in compact_css.replace(" ", ""), (
-        "The compact titlebar breakpoint should match the hidden workspace-panel breakpoint"
+    assert ".rightpanel.mobile-open{right:0!important" in compact_css.replace(" ", ""), (
+        "The compact titlebar breakpoint must match the slide-over breakpoint, so a "
+        "viewport that shows the hamburger can also open the workspace panel"
     )
 
 
