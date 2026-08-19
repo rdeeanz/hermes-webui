@@ -2,6 +2,7 @@ from pathlib import Path
 import re
 
 from tests.js_source_extract import extract_function
+from tests.locale_contract import is_partial
 
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
@@ -19,7 +20,13 @@ def _locale_blocks_with_body(i18n_text: str):
         i18n_text,
         flags=re.S,
     )
-    return [(quoted or plain, body) for quoted, plain, body in locale_blocks]
+    # Partial locales fall back to English per key, so they are not held to
+    # kanban key parity — see tests/locale_contract.py.
+    return [
+        (quoted or plain, body)
+        for quoted, plain, body in locale_blocks
+        if not is_partial(quoted or plain)
+    ]
 
 
 def test_kanban_has_native_sidebar_rail_and_mobile_tab():

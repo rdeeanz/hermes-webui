@@ -1,4 +1,5 @@
 from pathlib import Path
+from tests.locale_contract import is_partial
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -74,6 +75,9 @@ def test_model_health_i18n_keys_exist_in_locale_blocks():
     assert len(locale_starts) >= 13, f"expected 13+ locale blocks, found {len(locale_starts)}"
     bounds = locale_starts + [("__end__", len(I18N_JS))]
     for i, (code, start) in enumerate(locale_starts):
+        # Partial locales fall back to English per key — see tests/locale_contract.py.
+        if is_partial(code):
+            continue
         block = I18N_JS[start : bounds[i + 1][1]]
         for key in keys:
             assert f"{key}:" in block, f"locale '{code}' is missing {key}"

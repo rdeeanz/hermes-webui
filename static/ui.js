@@ -8217,7 +8217,11 @@ function _applyBusyComposerPlaceholder(){
   if(_compressionPlaceholderSaved!==null) return;
   if(input.disabled) return;
   if(_composerHasContent()) return;
-  const idlePlaceholder='Message '+assistantDisplayName()+'\u2026';
+  // Localised; {0} is the configurable bot name. This is the authoritative
+  // owner of the idle placeholder — it runs after applyBotName() and overwrote
+  // whatever that set, which is why the string stayed English in every locale.
+  const idlePlaceholder=(typeof t==='function'&&t('composer_placeholder',assistantDisplayName()))
+    ||('Message '+assistantDisplayName()+'\u2026');
   if(!window._showBusyPlaceholderHint||!S.busy){
     input.placeholder=idlePlaceholder;
     return;

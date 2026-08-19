@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from tests.locale_contract import complete_blocks
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,7 +18,8 @@ def _locale_blocks():
     for idx, match in enumerate(matches):
         end = matches[idx + 1].start() if idx + 1 < len(matches) else text.index("\n};", match.end())
         blocks[match.group(1)] = text[match.end():end]
-    return blocks
+    # Partial locales fall back to English per key — see tests/locale_contract.py.
+    return complete_blocks(blocks)
 
 
 def test_markdown_table_enhancer_is_registered_and_invoked_after_render_paths():

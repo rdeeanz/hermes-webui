@@ -13,7 +13,7 @@
 >
 > Tanggal analisa: 2026-08-19 · Commit dasar analisa: `fc1dc3a`
 >
-> **STATUS: Fase 1 SELESAI · Fase 2 SELESAI (1 item tertunda).** Lihat
+> **STATUS: Fase 1 SELESAI · Fase 2 SELESAI.** Lihat
 > [§0 Status Implementasi](#0-status-implementasi) untuk ringkasan apa yang sudah
 > dikerjakan, angka sebelum/sesudah yang terukur, dan apa yang masih tersisa.
 > Bagian §5 dan §6 sengaja **tidak** ditulis ulang — keduanya adalah catatan
@@ -64,7 +64,7 @@ me-render halaman di Chromium headless — bukan dengan membaca ulang kode.
 | **2.3** Audit Control Center 393px | Perbaiki yang gagal | ✅ **Selesai** | 11 panel diaudit; 11 target sentuh diperbaiki di 3 panel |
 | **2.4** Zoom + `viewport-fit=cover` | Izinkan zoom di browser | ✅ **Selesai** | Zoom aktif di tab, tetap terkunci di PWA terinstal |
 | **2.5** Gestur swipe | Buka drawer / tutup panel | ✅ **Selesai** | Swipe-tutup ditambahkan; swipe-buka **ternyata sudah ada** di upstream |
-| **2.6** Locale Bahasa Indonesia | Tambah `id` ke `LOCALES` | ❌ **Tidak dikerjakan** | Terhalang kontrak kelengkapan locale — lihat §0.4 |
+| **2.6** Locale Bahasa Indonesia | Tambah `id` ke `LOCALES` | ✅ **Selesai** | ±150 key inti; kontrak kelengkapan dilonggarkan lewat `tests/locale_contract.py` — lihat [§0.4](#04-locale-bahasa-indonesia--selesai-kontrak-dilonggarkan) |
 
 Lima commit: `e387df0`, `f140951`, `6512511`, `20f3f3d`, `b136ea9`.
 
@@ -164,33 +164,59 @@ Empat hal muncul saat mengerjakan yang tidak ada di analisa awal:
    sekaligus menghabiskan connection pool per-host, sehingga harness diubah
    memakai ulang context.
 
-### 0.4 Yang TIDAK dikerjakan, dan mengapa
+### 0.4 Locale Bahasa Indonesia — SELESAI (kontrak dilonggarkan)
 
-**Locale Bahasa Indonesia (2.6) — terhalang kontrak proyek.**
+**Keputusan pemilik repo: terima locale parsial.** Sebelumnya item ini terhalang
+karena repo menegakkan kelengkapan locale — setiap bundle di `LOCALES` wajib
+memuat setiap keluarga key. Kontrak itu kini **dilonggarkan secara eksplisit**,
+bukan dilubangi diam-diam.
 
-Locale `id` sudah ditulis (±180 key inti: composer, navigasi, sesi, suara,
-pemilih model, login, dan surface mobile baru) lalu **dibatalkan**. Alasannya:
-repo ini menegakkan **kelengkapan locale**. Dua puluh enam test memastikan
-setiap bundle di `LOCALES` memuat setiap keluarga key (auth safety, kuota
-provider, kanban, ekstensi, selected-text reply, dan lainnya), dan satu test
-bahkan meng-hardcode jumlah 15 locale.
+**Bagaimana pelonggarannya dibuat.** Satu modul, `tests/locale_contract.py`,
+mendeklarasikan locale mana yang parsial beserta alasannya. Ke-24 test yang
+menegakkan paritas key sekarang bertanya ke modul itu, bukan meng-hardcode kode
+locale. Konsekuensinya:
 
-Artinya locale parsial melanggar kontrak proyek, sekalipun `t()` sendiri
-menangani fallback per-key ke bahasa Inggris dengan baik
-(`_locale[key] ?? LOCALES.en[key]`). Ada dua pilihan, dan keduanya bukan
-keputusan saya:
+- Locale yang lengkap **tetap** diikat kontrak penuh — ini bukan cara diam-diam
+  berhenti merawat bahasa yang sudah dikirim.
+- Menaikkan `id` menjadi lengkap kelak = **hapus satu baris** di modul itu, bukan
+  menyunting 24 berkas test lagi.
+- `en` tidak boleh parsial (ia target fallback semua locale), dan itu ditegakkan.
 
-- **Menerjemahkan ~1.600 key** — ini proyek penerjemahan, bukan perubahan kode.
-  Menebak-nebak label Indonesia untuk alur pengaturan yang destruktif (mis.
-  konfirmasi menonaktifkan autentikasi) lebih berbahaya daripada membiarkannya
-  berbahasa Inggris.
-- **Melonggarkan 26 test agar `id` dikecualikan** — ini membatalkan keputusan
-  yang jelas disengaja oleh proyek, dan bukan wewenang saya untuk memutuskannya
-  sepihak.
+**Apa yang diterjemahkan.** ±150 key: layar pertama seutuhnya (judul, subjudul,
+tiga chip saran, placeholder komposer), composer, tab navigasi, aksi sesi, mode
+suara, pemilih model, halaman login (klien *dan* server), status koneksi, serta
+surface mobile baru dari Fase 2 (saved prompts, outline). Sisanya — cron,
+onboarding, ekstensi, ±200 string settings — **sengaja** dibiarkan fallback ke
+Inggris. Menebak label Indonesia untuk alur destruktif seperti konfirmasi
+menonaktifkan autentikasi lebih berbahaya daripada membiarkannya Inggris.
 
-Kalau Anda ingin ini dilanjutkan, keputusan yang saya butuhkan dari Anda: apakah
-proyek bersedia menerima locale parsial (saya sesuaikan test-nya), atau kita
-kerjakan terjemahan penuh secara bertahap per keluarga key.
+**Kewajiban yang tetap melekat pada locale parsial** (ditegakkan oleh
+`tests/test_partial_locale_contract.py`, 7 test):
+
+| Kewajiban | Kenapa |
+|---|---|
+| `_lang`, `_label`, `_speech` wajib ada | tanpa itu locale tidak muncul di picker dan salah dilafalkan |
+| Wajib menerjemahkan permukaan inti | bundle yang tidak menutup composer/navigasi/login itu stub, bukan bahasa |
+| Setiap key-nya harus ada di `en` | menjaga rantai fallback dan menangkap salah ketik nama key |
+| Setiap pengecualian wajib beralasan | itulah yang dibaca peninjau saat menilai apakah masih layak |
+| Minimal 10 locale tetap lengkap | pengecualian tidak boleh melebar jadi pensiun kontrak |
+
+**Bug yang ditemukan saat mengerjakan.** Placeholder komposer — string paling
+menonjol di layar pertama — **tidak bisa diterjemahkan oleh locale mana pun**. Ia
+dirakit sebagai `'Message ' + name + '…'` di dua tempat, dan yang menang adalah
+`_applyBusyComposerPlaceholder()` di `ui.js` yang menimpa nilai dari
+`applyBotName()`. Sekarang jadi key ber-template (`composer_placeholder`,
+`{0}` = nama bot) di kedua tempat, dan `applyLocaleToDOM()` ikut memanggil
+`applyBotName()` agar berganti saat bahasa diganti. Locale lain tidak berubah
+perilakunya — mereka tetap menampilkan bahasa Inggris seperti sebelumnya.
+
+**Terverifikasi di browser sungguhan** (393px dan 1440px): locale muncul di
+picker sebagai "Bahasa Indonesia", dipilih lewat handler UI asli, `<html lang>`
+jadi `id-ID`, string inti tampil Indonesia, key yang tidak diterjemahkan jatuh ke
+**Inggris** (bukan ke nama key), pilihan bertahan setelah reload, dan nol error
+konsol.
+
+### 0.4b Yang masih TIDAK dikerjakan
 
 **Filter tabel markdown tetap desktop-only** — ini input teks yang dirender ke
 area header tabel, dan justru itulah yang dulu membuat header sempit membungkus
@@ -206,6 +232,8 @@ kesenjangan yang disengaja di `tests/test_mobile_feature_parity.py`.
 | `tests/test_breakpoint_contract.py` | Menyandingkan angka breakpoint CSS dan JS; menolak breakpoint layout ketiga. |
 | `tests/test_vendored_frontend_assets.py` | Tidak boleh ada `<script src>`/`<link href>` ke origin remote; aset vendor ada, ter-pre-cache SW, dan theme swap mempertahankan cache-buster. |
 | `tests/test_mobile_feature_parity.py` | Kontrak keterjangkauan + **guard atas seluruh kelasnya**: setiap `display:none` baru pada entry point fitur di media query `max-width` harus dijustifikasi di allowlist. |
+| `tests/locale_contract.py` | **Sumber kebenaran tunggal** locale mana yang parsial dan mengapa. Ke-24 test paritas key bertanya ke sini alih-alih meng-hardcode kode locale. |
+| `tests/test_partial_locale_contract.py` | Menjaga pengecualian itu sendiri: identitas locale, permukaan inti, rantai fallback, alasan wajib, dan bahwa minimal 10 locale tetap lengkap. |
 
 Test lama yang mengunci perilaku lama **diperbarui, bukan dihapus**, dan sekarang
 menegakkan kontrak yang sudah diperbaiki:
@@ -235,7 +263,7 @@ playwright yang memang sudah ada di sandbox ini).
 Fase 3–5 belum disentuh dan tetap seperti tertulis di §8. Ditambah tiga item
 baru yang muncul dari pekerjaan ini:
 
-1. **Locale Bahasa Indonesia** — butuh keputusan Anda (§0.4).
+1. ~~**Locale Bahasa Indonesia**~~ — **selesai** ([§0.4](#04-locale-bahasa-indonesia--selesai-kontrak-dilonggarkan)). Sisa: menaikkan `id` jadi locale lengkap dengan menerjemahkan cron, onboarding, ekstensi, dan settings — satu keluarga key per kali, lalu hapus entrinya dari `PARTIAL_LOCALES`.
 2. **Vendor PDF.js + Mermaid** (~4 MB) — akan menghapus jsdelivr dari CSP
    sepenuhnya dan membuat deployment benar-benar air-gapped.
 3. **Filter tabel markdown di HP** — butuh surface sheet per tabel.
@@ -802,7 +830,7 @@ thread; Linux menanganinya dengan santai. Ini baru jadi kendala pada skenario
 multi-user puluhan orang, dan itu di luar tujuan proyek ini. Saya mencatatnya
 demi kelengkapan, bukan sebagai item kerja.
 
-### 6.12 ⛔ TERHALANG — Bahasa Indonesia belum tersedia
+### 6.12 ✅ DIPERBAIKI (Fase 2.6) — Bahasa Indonesia belum tersedia
 
 15 locale: `en, it, ja, ru, es, de, zh, zh-Hant, pt, ko, fr, cs, tr, pl, vi`.
 Tidak ada `id`. Relevan langsung dengan tujuan "user friendly" Anda, dan
@@ -1614,7 +1642,7 @@ Minimal sebelum merilis perubahan mobile:
 - [x] Audit Control Center di 393px — 11 target sentuh diperbaiki
 - [x] Perbaiki zoom + `viewport-fit=cover`
 - [x] Gestur swipe *(swipe-buka sudah ada di upstream; ditambahkan swipe-tutup)*
-- [ ] ⛔ Locale `id` — terhalang kontrak kelengkapan locale, butuh keputusan Anda ([§0.4](#04-yang-tidak-dikerjakan-dan-mengapa))
+- [x] Locale `id` — ±150 key inti; kontrak kelengkapan dilonggarkan lewat `tests/locale_contract.py`
 
 ### Sisa kerja baru yang ditemukan saat implementasi
 

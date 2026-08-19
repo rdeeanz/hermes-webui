@@ -13,6 +13,7 @@ import os
 import re
 from pathlib import Path
 from urllib.parse import urlparse
+from tests.locale_contract import is_partial
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -569,6 +570,11 @@ def test_i18n_wiki_keys_in_all_locales():
         locale_chunks.append(src[start:end])
 
     for i, chunk in enumerate(locale_chunks):
+        # The chunk opens with `_lang: '<code>'`, which identifies it. Partial
+        # locales fall back to English per key — see tests/locale_contract.py.
+        code_match = re.match(r"_lang:\s*'([^']+)'", chunk)
+        if code_match and is_partial(code_match.group(1)):
+            continue
         for key in required_keys:
             assert key + ":" in chunk, (
                 f"i18n key '{key}' missing from locale block {i + 1} "

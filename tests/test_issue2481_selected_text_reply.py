@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+from tests.locale_contract import complete_blocks
 
 
 REPO = Path(__file__).resolve().parent.parent
@@ -151,7 +152,8 @@ def test_selected_text_reply_styles_and_i18n_exist_for_all_locales():
         "context_block_remove",
     }
     key_pattern = re.compile(r"^\s{4}([a-zA-Z0-9_]+):", re.MULTILINE)
-    for locale, block in blocks.items():
+    # Partial locales fall back to English per key — see tests/locale_contract.py.
+    for locale, block in complete_blocks(blocks).items():
         keys = set(key_pattern.findall(block))
         missing = sorted(required - keys)
         assert not missing, f"{locale} missing selected-text reply keys: {missing}"
