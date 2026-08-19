@@ -81,13 +81,38 @@ _CSP_EXTRA_FRAME_RE = _re.compile(
     r"^https?://(?:\*\.)?[A-Za-z0-9._~-]+(?::(?P<port>\d{1,5}|\*))?$"
 )
 _CSP_HEADER_NAME = 'Content-Security-Policy'
+
+# Remaining third-party script origins, narrowed to exact paths.
+#
+# Prism.js and xterm.js used to load from the bare cdn.jsdelivr.net origin, which
+# meant ANY script on that CDN was executable in an authenticated page. They are
+# now vendored under static/vendor, so the only remaining CDN consumers are the
+# two heavyweight libraries that ui.js imports lazily and on demand:
+#
+#   PDF.js  — workspace PDF preview  (ui.js: _pdfSrc / _pdfWorker)
+#   Mermaid — diagram rendering in assistant messages
+#
+# CSP source expressions honour a path prefix, so scoping to these two directories
+# keeps both features working while removing the blanket grant. (Path matching is
+# bypassed by cross-origin redirects; that is acceptable here because the origin
+# itself was already trusted before this change — this narrows the grant, it does
+# not weaken anything.) Vendoring these two as well would let jsdelivr be dropped
+# from the policy entirely; they are ~4 MB combined, so that is a separate call.
+_CSP_JSDELIVR_LAZY_LIBS = (
+    "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/ "
+    "https://cdn.jsdelivr.net/npm/mermaid@10.9.3/"
+)
 _CSP_SHARED_POLICY_TEMPLATE = (
     "default-src 'self' https://*.cloudflareaccess.com; "
     "object-src 'none'; "
     "frame-ancestors 'none'; "
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://static.cloudflareinsights.com blob:; "
-    "worker-src blob: 'self' https://cdn.jsdelivr.net; "
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+    f"script-src 'self' 'unsafe-inline' {_CSP_JSDELIVR_LAZY_LIBS} "
+    "https://static.cloudflareinsights.com blob:; "
+    # pdf.worker.min.mjs is instantiated as a worker from the same CDN path.
+    f"worker-src blob: 'self' {_CSP_JSDELIVR_LAZY_LIBS}; "
+    # No CDN entry needed at all now: the only third-party stylesheet was the
+    # Prism theme, which is vendored.
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "img-src 'self' data: https: blob:; "
     "font-src 'self' data: https://fonts.gstatic.com; "
     "media-src 'self' data: blob:; "
@@ -153,7 +178,11 @@ def _csp_extra_frame_src() -> str:
 
 
 def _csp_connect_src(extra_connect_src: str = "") -> str:
-    return f"{_CSP_CONNECT_BASE} https://cdn.jsdelivr.net{extra_connect_src}"
+    # xterm's bundled source map used to be fetched from the CDN (#1850), which is
+    # why the whole origin was allowed here. The vendored copy has its
+    # sourceMappingURL stripped, so only the lazily-imported PDF.js / Mermaid
+    # modules still need network access, and only under their own paths.
+    return f"{_CSP_CONNECT_BASE} {_CSP_JSDELIVR_LAZY_LIBS}{extra_connect_src}"
 
 
 def _csp_frame_src(extra_frame_src: str = "") -> str:

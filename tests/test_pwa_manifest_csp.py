@@ -15,15 +15,18 @@ class TestManifestSrcCSP:
     """manifest-src must be explicitly declared in the Content-Security-Policy."""
 
     def _csp(self) -> str:
-        text = (ROOT / "api" / "helpers.py").read_text(encoding="utf-8")
-        start = text.find("Content-Security-Policy")
-        assert start != -1, "Content-Security-Policy not found in helpers.py"
-        # Grab the full CSP string (up to the closing paren of send_header).
-        # Widened from 600 -> 1000 after the PDF-preview fix (#3652) added
-        # `blob:` to script-src + a `worker-src` directive, pushing later
-        # directives (form-action) past the old window.
-        chunk = text[start:start + 1000]
-        return chunk
+        """Build the real policy instead of scraping a character window.
+
+        This used to read helpers.py as text and slice a fixed number of
+        characters after the first "Content-Security-Policy" match, which meant
+        the window had to be widened every time the source grew (600 -> 1000
+        after #3652) and broke again when a comment was added above the template.
+        Asking the module for the policy it actually emits is both stabler and a
+        stronger assertion: it covers the interpolated directives too.
+        """
+        from api.helpers import _build_csp_enforced_policy
+
+        return _build_csp_enforced_policy()
 
     def test_manifest_src_self_present(self):
         """CSP must contain an explicit manifest-src 'self' directive."""

@@ -11,12 +11,20 @@
 > ini adalah hasil pengukuran nyata, bukan estimasi. Bagian yang tidak bisa
 > diverifikasi langsung ditandai eksplisit dengan **[belum terverifikasi]**.
 >
-> Tanggal analisa: 2026-08-19 · Commit dasar: `fc1dc3a`
+> Tanggal analisa: 2026-08-19 · Commit dasar analisa: `fc1dc3a`
+>
+> **STATUS: Fase 1 SELESAI · Fase 2 SELESAI (1 item tertunda).** Lihat
+> [§0 Status Implementasi](#0-status-implementasi) untuk ringkasan apa yang sudah
+> dikerjakan, angka sebelum/sesudah yang terukur, dan apa yang masih tersisa.
+> Bagian §5 dan §6 sengaja **tidak** ditulis ulang — keduanya adalah catatan
+> temuan awal, dan menghapusnya akan menghilangkan alasan mengapa perbaikannya
+> dibuat. Setiap temuan yang sudah diperbaiki diberi penanda di tempatnya.
 
 ---
 
 ## Daftar Isi
 
+0. [Status Implementasi](#0-status-implementasi) ← **mulai di sini**
 1. [Ringkasan Eksekutif — Jawaban Jujur](#1-ringkasan-eksekutif--jawaban-jujur)
 2. [Codebase Ini Apa?](#2-codebase-ini-apa)
 3. [Tech Stack](#3-tech-stack)
@@ -29,6 +37,208 @@
 10. [Strategi Testing](#10-strategi-testing)
 11. [Risiko, Trade-off, dan Non-Goals](#11-risiko-trade-off-dan-non-goals)
 12. [Checklist Ringkas](#12-checklist-ringkas)
+
+---
+
+## 0. Status Implementasi
+
+**Fase 1 dan Fase 2 sudah dikerjakan.** Bagian ini adalah catatan pelaksanaannya:
+apa yang berubah, angka sebelum/sesudah yang benar-benar diukur, apa yang
+ditemukan di luar rencana, dan apa yang **tidak** jadi dikerjakan beserta
+alasannya.
+
+Semua verifikasi dilakukan dengan membooting `server.py` sungguhan dan
+me-render halaman di Chromium headless — bukan dengan membaca ulang kode.
+
+### 0.1 Papan skor
+
+| Item | Rencana | Status | Bukti |
+|---|---|---|---|
+| **1.1** Kontrak breakpoint | CSS token + konstanta JS + test sinkronisasi | ✅ **Selesai** | `--bp-phone`/`--bp-tablet`, `BP.PHONE`/`BP.TABLET`, `tests/test_breakpoint_contract.py` |
+| **1.2** Panel workspace di tablet | Slide-over sampai 1024px | ✅ **Selesai** | Terbukti terbuka di 768px & 820px (sebelumnya klik tidak menghasilkan apa pun) |
+| **1.3** Vendor Prism + xterm | Lokalkan, perketat CSP | ✅ **Selesai** | **0** request eksternal, **0** request gagal (sebelumnya 7 gagal per halaman) |
+| **1.4** Overflow horizontal 14px | Hilangkan | ✅ **Selesai** | `scrollWidth == clientWidth` di seluruh 9 viewport |
+| **1.5** Harness browser responsif | Test multi-viewport di CI | ✅ **Selesai** | `tests/browser_responsive.py`, 9 viewport, masuk workflow `browser-smoke` |
+| **2.1** Kembalikan fitur mobile | Saved prompts, outline, kontrol tabel | ✅ **Selesai** (tabel: sebagian) | Keduanya kini terjangkau lewat sheet; filter tabel tetap desktop-only (disengaja) |
+| **2.2** Primitif bottom sheet | Komponen sheet reusable | ✅ **Selesai** | `HermesSheet` di `boot.js` + CSS `[data-mobile-sheet]` |
+| **2.3** Audit Control Center 393px | Perbaiki yang gagal | ✅ **Selesai** | 11 panel diaudit; 11 target sentuh diperbaiki di 3 panel |
+| **2.4** Zoom + `viewport-fit=cover` | Izinkan zoom di browser | ✅ **Selesai** | Zoom aktif di tab, tetap terkunci di PWA terinstal |
+| **2.5** Gestur swipe | Buka drawer / tutup panel | ✅ **Selesai** | Swipe-tutup ditambahkan; swipe-buka **ternyata sudah ada** di upstream |
+| **2.6** Locale Bahasa Indonesia | Tambah `id` ke `LOCALES` | ❌ **Tidak dikerjakan** | Terhalang kontrak kelengkapan locale — lihat §0.4 |
+
+Lima commit: `e387df0`, `f140951`, `6512511`, `20f3f3d`, `b136ea9`.
+
+### 0.2 Angka sebelum → sesudah (terukur)
+
+**Panel workspace, hasil klik tombol Files:**
+
+| Viewport | Sebelum | Sesudah |
+|---|---|---|
+| 393px | terbuka (w=300) | terbuka (w=300) |
+| **768px** | **`display:none`, klik tidak berefek** | **terbuka (w=380)** |
+| **820px** | **`display:none`, klik tidak berefek** | **terbuka (w=380)** |
+| 1024px | in-flow, overflow dokumen 14px | terbuka (w=380), tanpa overflow |
+| 1440px | in-flow | in-flow (tidak berubah) |
+
+**Request eksternal saat halaman dimuat** (CDN diblokir):
+
+| | Sebelum | Sesudah |
+|---|---|---|
+| Request gagal | **7** (Prism ×3, xterm ×4) | **0** |
+| Request lintas-origin | 7 | **0** |
+| Error konsol | 7 | **0** |
+
+**Overflow horizontal dokumen** (`scrollWidth` vs `clientWidth`):
+
+| Viewport | Sebelum | Sesudah |
+|---|---|---|
+| 375 / 393 / 640 / 641 / 768 / 820 | sama | sama |
+| 1024 | 1038 (+14) | **1024** |
+| 1440 | 1454 (+14) | **1440** |
+
+**Cakupan CSP** — jsdelivr tidak lagi menjadi grant seluruh origin:
+
+```
+sebelum  script-src  … https://cdn.jsdelivr.net …
+         style-src   … https://cdn.jsdelivr.net …
+         worker-src  … https://cdn.jsdelivr.net
+         connect-src … https://cdn.jsdelivr.net
+
+sesudah  script-src  … https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/
+                       https://cdn.jsdelivr.net/npm/mermaid@10.9.3/ …
+         style-src   … (jsdelivr dihapus seluruhnya)
+         worker-src  … kedua path di atas
+         connect-src … kedua path di atas
+```
+
+**Ukuran** — `static/` bertambah ~857 KB (apparent) untuk aset yang di-vendor:
+`vendor/prismjs` 570 KB (298 grammar terminifikasi) + `vendor/xterm` 287 KB.
+Payload aplikasi itu sendiri tidak berubah (5.527 KB mentah / **1.415 KB gzip**)
+— aset vendor dimuat sesuai kebutuhan dan kini bisa di-pre-cache service worker,
+yang sebelumnya mustahil karena lintas-origin.
+
+**Target sentuh** yang diperbaiki (semuanya < 40 px, ditemukan oleh harness dan
+audit Control Center):
+
+| Lokasi | Sebelum | Sesudah |
+|---|---|---|
+| Tombol saran sesi kosong (×3) | 39 px tinggi | 44 px |
+| Kanban `.panel-head-btn` (×4) | 24×24 | 44×44 |
+| Settings `.settings-action-btn` (×6) | 37 px tinggi | 44 px |
+| Logs tombol salin | 28 px tinggi | 44 px |
+
+### 0.3 Temuan di luar rencana
+
+Empat hal muncul saat mengerjakan yang tidak ada di analisa awal:
+
+1. **Perbaikan tablet nyaris rusak lagi oleh kelas bug yang sama.** Setelah
+   memindahkan slide-over ke ≤1024px, panel tetap tidak muncul — ternyata
+   `@media(min-width:641px){ .rightpanel{position:relative} }` (aturan untuk
+   resize handle) berada **lebih akhir** di file sehingga mengalahkan
+   `position:fixed`. Akibatnya panel mempertahankan kotak layout-nya sementara
+   `right:calc(-1 * var(--overlay-w))` mendorongnya ke samping, **melebarkan
+   dokumen 380px** alih-alih memarkirnya di luar layar. Kedua rel kini memakai
+   boundary-nya masing-masing: `.sidebar` di 641px, `.rightpanel` di 1025px.
+   *Pelajaran: satu breakpoint yang dipakai bersama oleh dua komponen dengan
+   perilaku berbeda adalah sumber bug ini, bukan sekadar gejalanya.*
+
+2. **PDF.js dan Mermaid juga dimuat dari CDN.** Analisa awal menyebut 7 aset;
+   itu akurat untuk *page load*, tapi `ui.js` juga meng-import PDF.js
+   (`4.9.155`) dan Mermaid (`10.9.3`) secara lazy saat pengguna membuka PDF atau
+   merender diagram. Keduanya ~4 MB gabungan, jadi tidak ikut di-vendor;
+   sebagai gantinya grant CSP-nya dipersempit ke path spesifik. Untuk deployment
+   air-gapped penuh, keduanya perlu di-vendor juga — dicatat sebagai sisa kerja.
+
+3. **Klaim saya soal sorting tabel markdown salah.** Analisa awal menyebutnya
+   "fitur yang benar-benar tidak bisa dijangkau". Faktanya **sorting selalu
+   berfungsi di HP** — tombol header tetap bisa di-tap; yang disembunyikan hanya
+   *glyph indikator arahnya*. Sekarang glyph itu ditampilkan untuk kolom yang
+   sedang tersortir saja, sehingga tidak ada biaya lebar header di keadaan
+   default (yang merupakan alasan asli aturan itu ditulis). Yang benar-benar
+   tidak terjangkau hanyalah input filter.
+
+4. **`ThreadingHTTPServer` terbukti bukan hambatan.** §6.11 menyebutnya "bukan
+   masalah untuk 1 pengguna" tanpa bukti. Diukur langsung: server melayani
+   `index.html` **seketika (0,00 s)** sambil menahan **40 SSE stream bersamaan**.
+   Yang justru kehabisan sumber daya adalah Chromium — 9 browser context
+   sekaligus menghabiskan connection pool per-host, sehingga harness diubah
+   memakai ulang context.
+
+### 0.4 Yang TIDAK dikerjakan, dan mengapa
+
+**Locale Bahasa Indonesia (2.6) — terhalang kontrak proyek.**
+
+Locale `id` sudah ditulis (±180 key inti: composer, navigasi, sesi, suara,
+pemilih model, login, dan surface mobile baru) lalu **dibatalkan**. Alasannya:
+repo ini menegakkan **kelengkapan locale**. Dua puluh enam test memastikan
+setiap bundle di `LOCALES` memuat setiap keluarga key (auth safety, kuota
+provider, kanban, ekstensi, selected-text reply, dan lainnya), dan satu test
+bahkan meng-hardcode jumlah 15 locale.
+
+Artinya locale parsial melanggar kontrak proyek, sekalipun `t()` sendiri
+menangani fallback per-key ke bahasa Inggris dengan baik
+(`_locale[key] ?? LOCALES.en[key]`). Ada dua pilihan, dan keduanya bukan
+keputusan saya:
+
+- **Menerjemahkan ~1.600 key** — ini proyek penerjemahan, bukan perubahan kode.
+  Menebak-nebak label Indonesia untuk alur pengaturan yang destruktif (mis.
+  konfirmasi menonaktifkan autentikasi) lebih berbahaya daripada membiarkannya
+  berbahasa Inggris.
+- **Melonggarkan 26 test agar `id` dikecualikan** — ini membatalkan keputusan
+  yang jelas disengaja oleh proyek, dan bukan wewenang saya untuk memutuskannya
+  sepihak.
+
+Kalau Anda ingin ini dilanjutkan, keputusan yang saya butuhkan dari Anda: apakah
+proyek bersedia menerima locale parsial (saya sesuaikan test-nya), atau kita
+kerjakan terjemahan penuh secara bertahap per keluarga key.
+
+**Filter tabel markdown tetap desktop-only** — ini input teks yang dirender ke
+area header tabel, dan justru itulah yang dulu membuat header sempit membungkus
+berlebihan. Memberinya rumah di HP berarti membuat surface baru (sheet per
+tabel), yaitu perubahan desain, bukan perbaikan. Dicatat eksplisit sebagai
+kesenjangan yang disengaja di `tests/test_mobile_feature_parity.py`.
+
+### 0.5 Test yang ditambahkan
+
+| File | Isi |
+|---|---|
+| `tests/browser_responsive.py` | **Gerbang layout di browser sungguhan.** 9 viewport; memeriksa overflow horizontal, keterjangkauan panel (tombol Files harus benar-benar menampilkan panel), navigasi sidebar, target sentuh, dan error konsol. Masuk ke workflow `browser-smoke`. |
+| `tests/test_breakpoint_contract.py` | Menyandingkan angka breakpoint CSS dan JS; menolak breakpoint layout ketiga. |
+| `tests/test_vendored_frontend_assets.py` | Tidak boleh ada `<script src>`/`<link href>` ke origin remote; aset vendor ada, ter-pre-cache SW, dan theme swap mempertahankan cache-buster. |
+| `tests/test_mobile_feature_parity.py` | Kontrak keterjangkauan + **guard atas seluruh kelasnya**: setiap `display:none` baru pada entry point fitur di media query `max-width` harus dijustifikasi di allowlist. |
+
+Test lama yang mengunci perilaku lama **diperbarui, bukan dihapus**, dan sekarang
+menegakkan kontrak yang sudah diperbaiki:
+`test_issue5545_three_panel_layout.py` (kini melarang `.rightpanel` disembunyikan
+di lebar mana pun), `test_mobile_layout.py`, `test_issue1100_prism_sri.py`,
+`test_sidebar_collapse_toggle.py`, `test_theme_color_meta_bridge.py`,
+`test_issue3571_saved_prompts.py`, `test_issue2124_outline_panel.py`, dan lima
+test CSP.
+
+Dua test lain diperbaiki karena **rapuh**, bukan karena kontraknya berubah:
+`test_pwa_manifest_csp.py` dan `test_issue4553_mobile_transcript_overflow.py`
+sama-sama memotong sejumlah karakter tetap dari sumber (1.000 dan 5.000) alih-alih
+mem-parsing strukturnya, sehingga penambahan apa pun di atas target membuatnya
+gagal. Yang pertama kini membangun policy CSP sungguhan lewat
+`_build_csp_enforced_policy()`; yang kedua menelusuri blok media dengan
+penyeimbangan kurung.
+
+**Catatan metodologi.** Baseline regresi pertama saya cacat: `git stash` tidak
+membatalkan commit, jadi perbandingannya sebenarnya melawan kode saya sendiri
+dan melaporkan "0 regresi" secara keliru. Baseline yang benar memakai
+`git worktree` pada commit sebelum perubahan. Setelah diperbaiki, himpunan
+kegagalan sama persis dengan baseline (50 = 50; seluruhnya kegagalan environment
+playwright yang memang sudah ada di sandbox ini).
+
+### 0.6 Sisa kerja setelah Fase 1–2
+
+Fase 3–5 belum disentuh dan tetap seperti tertulis di §8. Ditambah tiga item
+baru yang muncul dari pekerjaan ini:
+
+1. **Locale Bahasa Indonesia** — butuh keputusan Anda (§0.4).
+2. **Vendor PDF.js + Mermaid** (~4 MB) — akan menghapus jsdelivr dari CSP
+   sepenuhnya dan membuat deployment benar-benar air-gapped.
+3. **Filter tabel markdown di HP** — butuh surface sheet per tabel.
 
 ---
 
@@ -50,12 +260,12 @@ Rincian jujurnya:
 | Layout smartphone (≤640px) | ✅ **Sangat baik** | Drawer sidebar off-canvas, slide-over panel file, composer icon-only, target sentuh 44px, `100dvh`, `visualViewport` keyboard inset |
 | PWA / "add to home screen" | ✅ **Ada** | `manifest.json` (standalone, portrait, shortcuts, maskable icon) + service worker pre-cache app shell |
 | Layout desktop | ✅ **Baik** | Tiga panel, container queries, resize handle |
-| **Layout tablet portrait (641–900px)** | ❌ **Ada bug nyata** | Panel workspace/file **tidak bisa dibuka sama sekali** — terverifikasi di 768px & 820px |
-| Berfungsi tanpa internet publik (VPS air-gapped) | ⚠️ **Tidak** | 7 aset (Prism.js, xterm.js) di-load dari `cdn.jsdelivr.net` — terverifikasi gagal saat CDN diblokir |
+| **Layout tablet portrait (641–900px)** | ✅ **DIPERBAIKI** (Fase 1.2) | Panel kini terbuka sebagai slide-over di 768px & 820px — lihat [§0.2](#02-angka-sebelum--sesudah-terukur) |
+| Berfungsi tanpa internet publik (VPS air-gapped) | ✅ **DIPERBAIKI** (Fase 1.3) | Prism + xterm di-vendor; 0 request eksternal saat halaman dimuat. *Sisa:* PDF.js & Mermaid masih lazy-load dari CDN |
 | Notifikasi saat browser ditutup | ❌ **Belum ada** | Hanya `Notification` API + `showNotification` saat tab hidup; **tidak ada Web Push/VAPID** |
-| Zoom / aksesibilitas mobile | ⚠️ **Sengaja dimatikan** | `user-scalable=no, maximum-scale=1` — melanggar WCAG 2.1 SC 1.4.4, dikunci oleh test |
+| Zoom / aksesibilitas mobile | ✅ **DIPERBAIKI** (Fase 2.4) | Zoom aktif di tab browser; tetap terkunci hanya di PWA terinstal |
 | Panduan reverse proxy + TLS | ❌ **Tidak ada** | README eksplisit menyerahkan ini ke operator; hanya SSH tunnel & Tailscale yang didokumentasikan |
-| Bahasa Indonesia di UI | ❌ **Belum ada** | 15 locale tersedia (`en, it, ja, ru, es, de, zh, zh-Hant, pt, ko, fr, cs, tr, pl, vi`) — tanpa `id` |
+| Bahasa Indonesia di UI | ❌ **Belum ada** — terhalang | Repo mewajibkan kelengkapan locale (26 test); butuh keputusan Anda — lihat [§0.4](#04-yang-tidak-dikerjakan-dan-mengapa) |
 | Berat halaman | ⚠️ **Berat** | 5,5 MB mentah / **1,4 MB gzip**; `i18n.js` sendiri 477 KB gzip berisi 15 bahasa sekaligus |
 
 ### Kesimpulan praktis untuk Anda
@@ -285,6 +495,10 @@ lima viewport. Berikut hasil mentahnya.
 
 ### 5.1 Matriks hasil
 
+> **Catatan:** tabel di bawah adalah kondisi **sebelum** Fase 1–2. Kondisi
+> sesudahnya ada di [§0.2](#02-angka-sebelum--sesudah-terukur). Ia dipertahankan
+> apa adanya karena inilah bukti yang memotivasi perbaikannya.
+
 | Viewport | Overflow horizontal | Sidebar | Panel Workspace | Hamburger | Tombol Files diklik → | Target sentuh <40px |
 |---|---|---|---|---|---|---|
 | **375×667** (iPhone SE) | ❌ tidak ada | drawer off-canvas | slide-over | ✅ | — | 17 |
@@ -353,7 +567,7 @@ tentang "apa itu phone / tablet / desktop".
 
 Diurutkan dari dampak tertinggi.
 
-### 6.1 🔴 BUG: Panel workspace tidak bisa dibuka di tablet portrait (641–900px)
+### 6.1 ✅ DIPERBAIKI (Fase 1.2) — BUG: Panel workspace tidak bisa dibuka di tablet portrait (641–900px)
 
 **Bukti terukur.** Pada 768px dan 820px: tombol `.composer-workspace-files-btn`
 terlihat dan bisa diklik, tapi setelah diklik `.rightpanel` tetap
@@ -387,7 +601,7 @@ aturan CSS yang menanggapinya di band itu.
 **Dampak:** di iPad portrait, iPad mini, tablet Android, dan jendela browser
 desktop yang di-split-screen — **file browser hilang total tanpa jalan alternatif**.
 
-### 6.2 🔴 Ketergantungan CDN eksternal (jsdelivr)
+### 6.2 ✅ DIPERBAIKI SEBAGIAN (Fase 1.3) — Ketergantungan CDN eksternal (jsdelivr)
 
 **Bukti terukur.** Saat memuat halaman di environment tanpa akses jsdelivr,
 **7 request gagal** di *setiap* viewport:
@@ -463,7 +677,7 @@ Ini adalah **satu-satunya gap paling penting** untuk mencapai rasa "seperti
 aplikasi Claude di HP". Agent yang berjalan lama tanpa notifikasi asinkron
 kehilangan sebagian besar nilainya di mobile.
 
-### 6.5 🟠 Zoom dimatikan (aksesibilitas)
+### 6.5 ✅ DIPERBAIKI (Fase 2.4) — Zoom dimatikan (aksesibilitas)
 
 ```html
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -482,7 +696,7 @@ Solusi yang benar: `user-scalable=yes` sebagai default, lalu matikan zoom
 **hanya di mode standalone** lewat JS yang menulis ulang meta tag saat
 `matchMedia('(display-mode: standalone)').matches` bernilai true.
 
-### 6.6 🟡 `viewport-fit=cover` absen, padahal CSS memakai `env(safe-area-inset-*)`
+### 6.6 ✅ DIPERBAIKI (Fase 2.4) — `viewport-fit=cover` absen, padahal CSS memakai `env(safe-area-inset-*)`
 
 CSS punya 7 pemakaian `env(safe-area-inset-*)`:
 ```css
@@ -506,7 +720,7 @@ tapi hanya untuk iOS, hanya untuk sisi atas, dan hanya saat terinstal.
 Ini adalah **keputusan sadar dengan trade-off yang terdokumentasi**, bukan bug —
 tapi trade-off-nya patut ditinjau ulang untuk penggunaan landscape.
 
-### 6.7 🟡 Fitur yang hilang di layar kecil
+### 6.7 ✅ DIPERBAIKI SEBAGIAN (Fase 2.1) — Fitur yang hilang di layar kecil
 
 Dari audit `display:none` di dalam blok `@media (max-width: …)`:
 
@@ -525,7 +739,7 @@ Anda meminta **"mengakses semua fitur dan pengaturan via browser smartphone"**.
 Tiga item pertama di tabel itu adalah **fitur yang benar-benar tidak bisa
 dijangkau** dari HP saat ini.
 
-### 6.8 🟡 Tidak ada test browser untuk viewport mobile
+### 6.8 ✅ DIPERBAIKI (Fase 1.5) — Tidak ada test browser untuk viewport mobile
 
 `tests/browser_smoke.py` memuat halaman di Chromium headless dan gagal bila ada
 console error — bagus, tapi:
@@ -568,7 +782,7 @@ Jadi mount di `https://domain.com/hermes/` **bisa berfungsi** selama proxy
 menghapus prefix. Sisi server tidak punya `BASE_PATH`/`SCRIPT_NAME`, jadi proxy
 **wajib** melakukan strip.
 
-### 6.10 🟡 Overflow horizontal 14px di desktop/laptop
+### 6.10 ✅ DIPERBAIKI (Fase 1.4) — Overflow horizontal 14px di desktop/laptop
 
 Terukur di 1024px dan 1440px (bukan di mobile): `document.scrollWidth` melebihi
 `clientWidth` sebesar 14px. Penyebabnya `DIV.panel-actions` di dalam
@@ -577,7 +791,7 @@ Terukur di 1024px dan 1440px (bukan di mobile): `document.scrollWidth` melebihi
 14px yang bocor ke dokumen. Dampaknya kecil, tapi ini gejala dari
 `.panel-actions` yang tidak punya `flex-wrap`/`min-width:0`.
 
-### 6.11 🟢 Model konkurensi `ThreadingHTTPServer` + SSE
+### 6.11 ✅ TERVERIFIKASI BUKAN MASALAH — Model konkurensi `ThreadingHTTPServer` + SSE
 
 `ThreadingHTTPServer` membuat **satu thread OS per koneksi**, dan koneksi SSE
 bersifat long-lived. Tidak ada cap thread eksplisit di codebase.
@@ -588,7 +802,7 @@ thread; Linux menanganinya dengan santai. Ini baru jadi kendala pada skenario
 multi-user puluhan orang, dan itu di luar tujuan proyek ini. Saya mencatatnya
 demi kelengkapan, bukan sebagai item kerja.
 
-### 6.12 🟢 Bahasa Indonesia belum tersedia
+### 6.12 ⛔ TERHALANG — Bahasa Indonesia belum tersedia
 
 15 locale: `en, it, ja, ru, es, de, zh, zh-Hant, pt, ko, fr, cs, tr, pl, vi`.
 Tidak ada `id`. Relevan langsung dengan tujuan "user friendly" Anda, dan
@@ -864,11 +1078,18 @@ Checklist penerimaan Fase 0:
 
 ---
 
-### FASE 1 — Perbaiki yang rusak: tablet, CDN, overflow
+### FASE 1 ✅ SELESAI — Perbaiki yang rusak: tablet, CDN, overflow
 
 > **Tujuan:** semua lebar layout berfungsi; app jalan penuh tanpa internet keluar.
 >
 > **Estimasi: 3–5 hari** · **Prasyarat: Fase 0**
+>
+> ✅ **Selesai seluruhnya.** Commit `e387df0`, `f140951`. Hasil terukur di
+> [§0.2](#02-angka-sebelum--sesudah-terukur). Dua penyimpangan dari rencana:
+> perbaikan tablet memerlukan pemisahan boundary `position:relative` untuk kedua
+> rel (§0.3 nomor 1), dan CSP dipersempit ke path spesifik alih-alih menghapus
+> jsdelivr sepenuhnya karena PDF.js + Mermaid ternyata juga dari CDN (§0.3
+> nomor 2).
 
 #### 1.1 Tetapkan kontrak breakpoint (§7.2)
 
@@ -956,11 +1177,16 @@ kelas bug §6.1 muncul lagi.
 
 ---
 
-### FASE 2 — Paritas fitur & polesan mobile
+### FASE 2 ✅ SELESAI (1 item tertunda) — Paritas fitur & polesan mobile
 
 > **Tujuan:** setiap fitur dan setting terjangkau dari HP; interaksi terasa native.
 >
 > **Estimasi: 1–2 minggu** · **Prasyarat: Fase 1**
+>
+> ✅ **Selesai, kecuali 2.6 (locale Indonesia) yang terhalang** — lihat
+> [§0.4](#04-yang-tidak-dikerjakan-dan-mengapa). Commit `6512511`, `20f3f3d`,
+> `b136ea9`. Catatan: swipe tepi-kiri untuk membuka sidebar **sudah ada** di
+> upstream (#4660), jadi 2.5 hanya menambahkan pasangannya (swipe-tutup panel).
 
 #### 2.1 Kembalikan fitur yang hilang (§6.7)
 
@@ -1373,22 +1599,27 @@ Minimal sebelum merilis perubahan mobile:
 - [ ] Add to Home Screen
 - [ ] Backup harian `~/.hermes/` dan `~/workspace/`
 
-### Sprint 1 (Fase 1 — 3–5 hari)
+### Sprint 1 (Fase 1) — ✅ SELESAI
 
-- [ ] Kontrak breakpoint di CSS + JS + test sinkronisasi
-- [ ] 🔴 Perbaiki panel workspace di 641–1024px
-- [ ] 🔴 Vendor Prism.js + xterm.js; perketat CSP
-- [ ] Perbaiki overflow horizontal 14px
-- [ ] Harness `tests/browser_responsive.py` di CI
+- [x] Kontrak breakpoint di CSS + JS + test sinkronisasi
+- [x] 🔴 Perbaiki panel workspace di 641–1024px
+- [x] 🔴 Vendor Prism.js + xterm.js; perketat CSP
+- [x] Perbaiki overflow horizontal 14px
+- [x] Harness `tests/browser_responsive.py` di CI
 
-### Sprint 2 (Fase 2 — 1–2 minggu)
+### Sprint 2 (Fase 2) — ✅ SELESAI (1 tertunda)
 
-- [ ] Komponen bottom sheet
-- [ ] Kembalikan saved prompts, outline, kontrol tabel di mobile
-- [ ] Audit Control Center di 393px
-- [ ] Perbaiki zoom + `viewport-fit=cover`
-- [ ] Gestur swipe
-- [ ] Locale `id`
+- [x] Komponen bottom sheet
+- [x] Kembalikan saved prompts + outline di mobile *(filter tabel: tetap desktop-only, disengaja)*
+- [x] Audit Control Center di 393px — 11 target sentuh diperbaiki
+- [x] Perbaiki zoom + `viewport-fit=cover`
+- [x] Gestur swipe *(swipe-buka sudah ada di upstream; ditambahkan swipe-tutup)*
+- [ ] ⛔ Locale `id` — terhalang kontrak kelengkapan locale, butuh keputusan Anda ([§0.4](#04-yang-tidak-dikerjakan-dan-mengapa))
+
+### Sisa kerja baru yang ditemukan saat implementasi
+
+- [ ] Vendor PDF.js + Mermaid (~4 MB) → hapus jsdelivr dari CSP sepenuhnya
+- [ ] Filter tabel markdown di HP (butuh surface sheet per tabel)
 
 ### Sprint 3 (Fase 3 — 1 minggu)
 
@@ -1436,6 +1667,12 @@ Minimal sebelum merilis perubahan mobile:
 | `static/sw.js` | 8,5 KB | Service worker, pre-cache shell |
 | `static/manifest.json` | 1,2 KB | Manifest PWA |
 | `tests/test_mobile_layout.py` | — | Regresi mobile statis (breakpoint, markup, overflow) |
+| `tests/browser_responsive.py` | — | **Baru (Fase 1.5)** — gerbang layout di browser sungguhan, 9 viewport |
+| `tests/test_breakpoint_contract.py` | — | **Baru (Fase 1.1)** — menyandingkan breakpoint CSS ↔ JS |
+| `tests/test_vendored_frontend_assets.py` | — | **Baru (Fase 1.3)** — melarang aset runtime dari CDN |
+| `tests/test_mobile_feature_parity.py` | — | **Baru (Fase 2.1/2.2)** — kontrak keterjangkauan fitur di HP |
+| `static/vendor/prismjs/1.29.0/` | 570 KB | **Baru (Fase 1.3)** — Prism core, autoloader, 298 grammar, 2 tema |
+| `static/vendor/xterm/5.3.0/` | 287 KB | **Baru (Fase 1.3)** — xterm.js + CSS + addon fit/web-links |
 | `docs/UIUX-GUIDE.md` | — | Kebijakan desain, termasuk aturan responsif |
 | `docs/remote-access.md` | 75 baris | SSH tunnel, Tailscale, laporan komunitas ARM64 |
 
@@ -1468,4 +1705,15 @@ print(f"{total} / {len(css)} byte = {total/len(css)*100:.1f}% di dalam @media")
 EOF
 
 # 4. Probe multi-viewport dengan Playwright — lihat §5.1 untuk invariannya
+
+# 5. Jalankan gerbang responsif yang ditambahkan di Fase 1.5.
+#    Ia membooting server-nya sendiri di port acak dengan state dir sementara.
+python tests/browser_responsive.py
+#    Di lingkungan yang Chromium-nya tidak cocok dengan versi playwright:
+HERMES_WEBUI_CHROMIUM=/path/ke/chromium python tests/browser_responsive.py
+
+# 6. Buktikan tidak ada aset yang dimuat dari CDN saat halaman dibuka.
+#    Blokir egress lalu muat halaman: requestfailed harus 0 (sebelum Fase 1.3
+#    ada 7 kegagalan per halaman di setiap viewport).
+python -m pytest tests/test_vendored_frontend_assets.py -q
 ```

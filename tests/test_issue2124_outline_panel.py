@@ -81,13 +81,23 @@ def test_outline_navigation_and_long_session_contract():
 
 
 def test_outline_opt_in_layout_and_render_state_contract():
-    """The enabled outline must stay desktop-only and avoid stale render states."""
+    """The outline's FLOATING RAIL is desktop-only; the outline itself is not.
+
+    This used to require `matchMedia('(max-width:900px)')` in _outlineAllowed()
+    and a rule hiding both the toggle and the panel below 900px. That made the
+    outline unreachable on phones and tablets rather than merely restyled — the
+    feature had no narrow-viewport entry point at all.
+
+    What is genuinely desktop-only is the rail's geometry: a 320px card pinned to
+    the right edge has nowhere to live on a phone. So the toggle stays hidden
+    below 900px and the offset maths is unchanged, while the panel itself is
+    presented as a bottom sheet, reached from the composer's mobile config panel.
+    """
     for marker in (
         "window._showConversationOutline === true",
         "toggle.hidden = !enabled",
         "wrapper.hidden = true",
         "window.applyConversationOutlinePreference",
-        "matchMedia('(max-width:900px)')",
         "--outline-workspace-offset",
         "panel.offsetWidth",
         "data-workspace-panel",
@@ -96,7 +106,14 @@ def test_outline_opt_in_layout_and_render_state_contract():
     ):
         assert marker in OUTLINE_JS
 
-    assert "#outlineToggleBtn,#outlinePanelWrapper{display:none!important;}" in STYLE_CSS
+    # Reachability, not width, decides whether the outline is allowed.
+    assert "matchMedia" not in OUTLINE_JS.split("function _outlineAllowed()")[1].split("\n}")[0], (
+        "_outlineAllowed() must not gate on viewport width — that removed the "
+        "outline on narrow viewports instead of restyling it"
+    )
+    # The rail geometry stays desktop-only; the panel gets a sheet presentation.
+    assert "#outlineToggleBtn{display:none!important;}" in STYLE_CSS
+    assert "#outlinePanelWrapper:not(.sheet-open){display:none!important;}" in STYLE_CSS
     assert "right:calc(var(--outline-workspace-offset, 0px) + 20px)" in STYLE_CSS
     assert "if (!S.messages || !S.messages.length)" not in OUTLINE_JS
 

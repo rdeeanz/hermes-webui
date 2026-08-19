@@ -843,17 +843,36 @@ async function _loadSavedPrompts(){
   return _savedPromptsCache;
 }
 
+// Saved prompts renders into the same element on every viewport; only its
+// presentation differs. HermesSheet turns it into a bottom sheet at phone width
+// (the anchored 280px popover cannot fit a phone, which is why this feature used
+// to be hidden below 640px and was therefore unreachable on mobile) and is a
+// no-op passthrough on wider screens. The `typeof` guards keep this working if
+// boot.js has not evaluated yet — it is the last script in the page.
+function _showSavedPromptsSurface(popup,btn){
+  if(window.HermesSheet) window.HermesSheet.present(popup,{opener:btn});
+  else popup.style.display='flex';
+}
+function _hideSavedPromptsSurface(popup){
+  if(window.HermesSheet) window.HermesSheet.dismiss(popup);
+  else popup.style.display='none';
+}
+function _savedPromptsSurfaceOpen(popup){
+  if(window.HermesSheet&&window.HermesSheet.isOpen(popup)) return true;
+  return popup.style.display!=='none';
+}
+
 async function toggleSavedPromptsPopup(){
   const popup=(typeof $==='function'&&$('savedPromptsPopup'))||document.getElementById('savedPromptsPopup');
   const btn=(typeof $==='function'&&$('btnSavedPrompts'))||document.getElementById('btnSavedPrompts');
   if(!popup)return;
-  if(popup.style.display!=='none'){
-    popup.style.display='none';
+  if(_savedPromptsSurfaceOpen(popup)){
+    _hideSavedPromptsSurface(popup);
     if(btn)btn.setAttribute('aria-expanded','false');
     return;
   }
   popup.innerHTML='<div class="saved-prompts-loading">Loading…</div>';
-  popup.style.display='flex';
+  _showSavedPromptsSurface(popup,btn);
   if(btn)btn.setAttribute('aria-expanded','true');
   const prompts=await _loadSavedPrompts();
   popup.innerHTML='';
@@ -873,7 +892,7 @@ async function toggleSavedPromptsPopup(){
       label.title=p.text;
       row.onclick=()=>{
         insertSavedPromptIntoComposer(p.text);
-        popup.style.display='none';
+        _hideSavedPromptsSurface(popup);
         if(btn)btn.setAttribute('aria-expanded','false');
       };
       const del=document.createElement('button');
@@ -911,7 +930,7 @@ async function toggleSavedPromptsPopup(){
       return;
     }
     _savedPromptsCache=null;
-    popup.style.display='none';
+    _hideSavedPromptsSurface(popup);
     if(btn)btn.setAttribute('aria-expanded','false');
     if(typeof showToast==='function') showToast((typeof t==='function'&&t('saved_prompts_saved'))||'Prompt saved',1600);
   };
@@ -922,9 +941,12 @@ async function toggleSavedPromptsPopup(){
 document.addEventListener('click',(e)=>{
   const popup=(typeof $==='function'&&$('savedPromptsPopup'))||document.getElementById('savedPromptsPopup');
   const btn=(typeof $==='function'&&$('btnSavedPrompts'))||document.getElementById('btnSavedPrompts');
-  if(!popup||popup.style.display==='none')return;
+  if(!popup||!_savedPromptsSurfaceOpen(popup))return;
+  // In sheet mode the backdrop owns outside-clicks, so leave it alone: this
+  // handler would otherwise race the backdrop's own dismiss.
+  if(window.HermesSheet&&window.HermesSheet.isOpen(popup))return;
   if(!popup.contains(e.target)&&e.target!==btn&&!(btn&&btn.contains(e.target))){
-    popup.style.display='none';
+    _hideSavedPromptsSurface(popup);
     if(btn)btn.setAttribute('aria-expanded','false');
   }
 },{capture:false});

@@ -22,13 +22,25 @@ def test_messages_inner_mobile_has_containment():
     css_file = Path(__file__).resolve().parent.parent / "static" / "style.css"
     content = css_file.read_text()
 
-    # Find the @media(max-width:640px) block and then .messages-inner within a reasonable window
+    # Walk the ACTUAL media block with balanced braces rather than reading a fixed
+    # number of characters after it. The old 5000-char look-ahead silently stopped
+    # covering .messages-inner as soon as earlier rules were added to the block,
+    # turning an unrelated change into a failure of this test.
     media_match = re.search(r'@media\(max-width:640px\)\{', content)
     assert media_match, "@media(max-width:640px) block not found"
 
-    # Extract content after the media query opening brace
-    media_start = media_match.start()
-    remaining_content = content[media_start:media_start + 5000]  # Look ahead 5000 chars
+    open_brace = media_match.end() - 1
+    depth = 0
+    end = len(content)
+    for idx in range(open_brace, len(content)):
+        if content[idx] == "{":
+            depth += 1
+        elif content[idx] == "}":
+            depth -= 1
+            if depth == 0:
+                end = idx
+                break
+    remaining_content = content[open_brace:end]
 
     # Find .messages-inner rule within this section
     messages_inner_match = re.search(r'\.messages-inner\{([^}]*)\}', remaining_content)

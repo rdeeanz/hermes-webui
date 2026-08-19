@@ -2,7 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!-- Zoom stays ENABLED in an ordinary browser tab. `user-scalable=no` blocks
+       pinch-zoom, which is a WCAG 2.1 SC 1.4.4 failure and hurts most where this
+       app hurts most: reading a wide code block on a phone. The installed PWA
+       shell still wants it off, so pwa-startup.js re-applies the locked variant
+       when (and only when) the app is running standalone.
+
+       `viewport-fit=cover` is required for env(safe-area-inset-*) to resolve to
+       anything. Without it, every `max(10px, env(safe-area-inset-left, 0))` in
+       style.css silently collapsed to its 10px fallback, so the safe-area work
+       that was already written never actually applied in browser mode — visible
+       in landscape on a notched phone, where content ran under the cutout. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hermes</title>
 <!-- base href enables subpath mount support; all static paths must stay relative (no leading slash).
      MUST appear before manifest/favicon links so browsers resolve relative URLs against the
@@ -70,7 +81,8 @@
   }
 })()</script>
 <link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
+  <!-- xterm.js CSS — vendored from npm:xterm@5.3.0 (see static/vendor/xterm/5.3.0). -->
+  <link rel="stylesheet" href="static/vendor/xterm/5.3.0/xterm.css?v=__WEBUI_VERSION__">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
   <!-- streaming-markdown: incremental DOM-building markdown parser for live streams -->
@@ -84,16 +96,32 @@
     // sha384 of smd.min.js @0.2.15: sha384-T6r95ocN9t3W8tUK2Fa6FPaO7bJryyjyW0WCalrUnpgtm2qXr5xcN4vwPYEJ6vHa
     window.smd = smd;
   </script>
-  <!-- Prism.js syntax highlighting (loaded async, non-blocking) -->
-  <!-- SRI removed from prism-tomorrow.min.css — jsdelivr serves different digests across
-       edge nodes causing intermittent integrity failures that block syntax highlighting (#1100).
-       Version is pinned to @1.29.0 which is sufficient for supply-chain assurance. -->
-  <link id="prism-theme" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" crossorigin="anonymous">
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" integrity="sha384-MXybTpajaBV0AkcBaCPT4KIvo0FzoCiWXgcihYsw4FUkEz0Pv3JGV6tk2G8vJtDc" crossorigin="anonymous" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" integrity="sha384-Uq05+JLko69eOiPr39ta9bh7kld5PKZoU+fF7g0EXTAriEollhZ+DrN8Q/Oi8J2Q" crossorigin="anonymous" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js" integrity="sha384-/nfmYPUzWMS6v2atn8hbljz7NE0EI1iGx34lJaNzyVjWGDzMv+ciUZUeJpKA3Glc" crossorigin="anonymous" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js" integrity="sha384-AQLWHRKAgdTxkolJcLOELg4E9rE89CPE2xMy3tIRFn08NcGKPTsELdvKomqji+DL" crossorigin="anonymous" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js" integrity="sha384-U4fBROT3kCM582gaYiNaOSQiJbXPzd9SfR1598Y7yeGSYVBzikXrNg0XyuU+mOnl" crossorigin="anonymous" defer></script>
+  <!-- Prism.js syntax highlighting + xterm.js terminal — vendored from npm, not a CDN.
+       These used to load from cdn.jsdelivr.net, which meant a VPS behind a strict
+       egress firewall lost syntax highlighting and the embedded terminal entirely,
+       and the service worker could not pre-cache them (cross-origin), so the PWA
+       shell was never really offline-capable. Serving them from static/vendor also
+       lets the CSP drop jsdelivr from style-src and narrow it elsewhere.
+
+       SRI is intentionally absent: same-origin assets are already covered by the
+       page's own integrity guarantees, and the version is pinned in the path.
+       The ?v= query gives them the same immutable far-future caching as the rest
+       of static/ (see _serve_static in api/routes.py). -->
+  <link id="prism-theme" rel="stylesheet" href="static/vendor/prismjs/1.29.0/themes/prism-tomorrow.min.css?v=__WEBUI_VERSION__">
+  <script src="static/vendor/prismjs/1.29.0/components/prism-core.min.js?v=__WEBUI_VERSION__" defer></script>
+  <script src="static/vendor/prismjs/1.29.0/plugins/autoloader/prism-autoloader.min.js?v=__WEBUI_VERSION__" defer></script>
+  <script src="static/vendor/xterm/5.3.0/xterm.js?v=__WEBUI_VERSION__" defer></script>
+  <script src="static/vendor/xterm/5.3.0/xterm-addon-fit.js?v=__WEBUI_VERSION__" defer></script>
+  <script src="static/vendor/xterm/5.3.0/xterm-addon-web-links.js?v=__WEBUI_VERSION__" defer></script>
+  <!-- The autoloader fetches per-language grammars on demand. Without this it would
+       still resolve them against its own script origin's default CDN path. -->
+  <script defer>
+    window.addEventListener('DOMContentLoaded', function () {
+      if (window.Prism && Prism.plugins && Prism.plugins.autoloader) {
+        Prism.plugins.autoloader.languages_path = 'static/vendor/prismjs/1.29.0/components/';
+      }
+    });
+  </script>
   <!-- PWA service worker registration -->
   <script>
     if ('serviceWorker' in navigator) {
@@ -740,6 +768,19 @@
             <button class="composer-mobile-config-action" id="composerMobileReasoningAction" type="button" onclick="toggleReasoningDropdown()" title="Reasoning effort level" style="display:none">
               <span class="composer-reasoning-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg></span>
               <span class="composer-mobile-config-copy"><span class="composer-mobile-config-kicker" data-i18n="composer_mobile_reasoning">Reasoning</span><span class="composer-mobile-config-value" id="composerMobileReasoningLabel"></span></span>
+            </button>
+            <!-- Phone-only entry points for affordances the composer footer has no
+                 room for. Previously these were simply `display:none` below 640px,
+                 which made them unreachable on a phone rather than relocated. They
+                 open the same surfaces the desktop controls open, presented as
+                 bottom sheets. -->
+            <button class="composer-mobile-config-action" id="composerMobileSavedPromptsAction" type="button" onclick="toggleSavedPromptsPopup()" title="Saved prompts" data-i18n-title="composer_control_saved_prompts" aria-label="Saved prompts" data-i18n-aria-label="composer_control_saved_prompts" aria-haspopup="menu" aria-expanded="false" aria-controls="savedPromptsPopup">
+              <span class="composer-model-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+              <span class="composer-mobile-config-copy"><span class="composer-mobile-config-kicker" data-i18n="composer_control_saved_prompts">Saved prompts</span></span>
+            </button>
+            <button class="composer-mobile-config-action" id="composerMobileOutlineAction" type="button" onclick="toggleOutlinePanel()" title="Conversation outline" data-i18n-title="outline_toggle" aria-label="Conversation outline" data-i18n-aria-label="outline_toggle">
+              <span class="composer-model-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
+              <span class="composer-mobile-config-copy"><span class="composer-mobile-config-kicker" data-i18n="outline_toggle">Outline</span></span>
             </button>
             <div class="composer-mobile-config-action composer-mobile-context-action" id="composerMobileContextAction" role="group" aria-label="Context window" style="display:none">
               <span class="composer-mobile-config-copy composer-mobile-context-copy">

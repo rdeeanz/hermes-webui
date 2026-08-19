@@ -21,6 +21,28 @@ BOOT_JS = (REPO / "static" / "boot.js").read_text(encoding="utf-8")
 PANELS_JS = (REPO / "static" / "panels.js").read_text(encoding="utf-8")
 
 
+def _resolve_bp_template(query):
+    """Substitute `${BP.NAME + N}` placeholders using boot.js's BP constants.
+
+    boot.js derives its media queries from the shared breakpoint contract rather
+    than hardcoding pixel values, so this test has to evaluate the same
+    expression the browser would.
+    """
+    def _const(name):
+        m = re.search(rf"\b{name}\s*:\s*(\d+)", BOOT_JS)
+        assert m, f"BP.{name} missing from boot.js"
+        return int(m.group(1))
+
+    def _sub(m):
+        return str(_const(m.group("name")) + int(m.group("delta") or 0))
+
+    return re.sub(
+        r"\$\{\s*BP\.(?P<name>[A-Z_]+)\s*(?:\+\s*(?P<delta>\d+))?\s*\}",
+        _sub,
+        query,
+    )
+
+
 # ── CSS contract ───────────────────────────────────────────────────────────
 
 class TestSidebarCollapseCSS:
@@ -94,11 +116,14 @@ class TestSidebarCollapseCSS:
         # in the asymmetric band silently flips the class while CSS sits out
         # — confusing for the user, broken for screen readers.
         js_bp = re.search(
-            r"function\s+_isDesktopWidth[^}]*?matchMedia\('([^']+)'\)",
+            r"function\s+_isDesktopWidth[^}]*?matchMedia\(['\"`]([^'\"`]+)['\"`]\)",
             BOOT_JS, re.DOTALL,
         )
         assert js_bp, "Could not locate _isDesktopWidth matchMedia query in boot.js"
-        js_query = js_bp.group(1)
+        # The query is a template literal built from the BP contract
+        # (see tests/test_breakpoint_contract.py), so resolve `${BP.X + N}`
+        # against the declared constants before comparing with the CSS.
+        js_query = _resolve_bp_template(js_bp.group(1))
 
         # Walk CSS to find which @media block encloses .layout.sidebar-collapsed
         idx = CSS.index(".layout.sidebar-collapsed .sidebar:not(.mobile-open)")

@@ -43,14 +43,16 @@ def test_security_helper_sends_enforcing_csp_with_hardening_directives(monkeypat
     assert "base-uri 'self'" in policy
     assert "form-action 'self'" in policy
     assert "manifest-src 'self' https://*.cloudflareaccess.com" in policy
-    assert "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://static.cloudflareinsights.com blob:" in policy
-    assert "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com" in policy
-    assert "worker-src blob: 'self' https://cdn.jsdelivr.net" in policy
+    assert "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/ https://cdn.jsdelivr.net/npm/mermaid@10.9.3/ https://static.cloudflareinsights.com blob:" in policy
+    assert "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com" in policy
+    # Prism's theme was the only third-party stylesheet; it is vendored now.
+    assert "style-src" in policy and "https://cdn.jsdelivr.net" not in policy.split("style-src")[1].split(";")[0]
+    assert "worker-src blob: 'self' https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/ https://cdn.jsdelivr.net/npm/mermaid@10.9.3/" in policy
     assert "font-src 'self' data: https://fonts.gstatic.com" in policy
     assert "object-src 'none'" in policy
     assert "frame-ancestors 'none'" in policy
     assert "media-src 'self' data: blob:" in policy
-    assert "connect-src 'self' http://127.0.0.1:* http://localhost:* http://ipc.localhost https://127.0.0.1:* https://localhost:* ws://127.0.0.1:* ws://localhost:* https://cdn.jsdelivr.net" in policy
+    assert "connect-src 'self' http://127.0.0.1:* http://localhost:* http://ipc.localhost https://127.0.0.1:* https://localhost:* ws://127.0.0.1:* ws://localhost:* https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/ https://cdn.jsdelivr.net/npm/mermaid@10.9.3/" in policy
 
 
 def test_enforcing_csp_honors_valid_extra_connect_origins(monkeypatch):
@@ -65,7 +67,7 @@ def test_enforcing_csp_honors_valid_extra_connect_origins(monkeypatch):
     assert (
         "connect-src 'self' http://127.0.0.1:* http://localhost:* "
         "http://ipc.localhost https://127.0.0.1:* https://localhost:* "
-        "ws://127.0.0.1:* ws://localhost:* https://cdn.jsdelivr.net "
+        "ws://127.0.0.1:* ws://localhost:* https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/ https://cdn.jsdelivr.net/npm/mermaid@10.9.3/ "
         "https://metrics.example.com wss://events.example.com:443; "
     ) in policy
 

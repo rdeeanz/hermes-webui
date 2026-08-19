@@ -18,8 +18,27 @@
     return /iPad|iPhone|iPod/.test(window.navigator.userAgent||'') ||
       (window.navigator.platform==='MacIntel' && window.navigator.maxTouchPoints>1);
   }
+  // The installed shell locks zoom; a browser tab must not.
+  //
+  // A standalone PWA that allows pinch-zoom rubber-bands like a web page instead
+  // of behaving like an app, so the locked viewport is right there. It is wrong
+  // in a normal tab, where blocking zoom is an accessibility failure. The meta
+  // tag is static markup, so the only way to make it conditional is to rewrite it
+  // once display mode is known — which is exactly what this file exists to do.
+  var VIEWPORT_BROWSER='width=device-width, initial-scale=1, viewport-fit=cover';
+  var VIEWPORT_STANDALONE='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
+  function syncViewportZoom(standalone){
+    try{
+      var meta=document.querySelector('meta[name="viewport"]');
+      if(!meta) return;
+      var want=standalone?VIEWPORT_STANDALONE:VIEWPORT_BROWSER;
+      if(meta.getAttribute('content')!==want) meta.setAttribute('content',want);
+    }catch(_){}
+  }
+
   function syncMode(){
     var standalone=isStandalone();
+    syncViewportZoom(standalone);
     root.classList.toggle('pwa-standalone',standalone);
     root.classList.toggle('pwa-browser',!standalone);
     root.classList.toggle('pwa-ios',isIOS());
@@ -68,6 +87,7 @@
   window.HermesPWA={
     isStandalone:isStandalone,
     syncMode:syncMode,
+    syncViewportZoom:syncViewportZoom,
     launchAction:function(){
       try{return new URLSearchParams(window.location.search||'').get('action')||null;}catch(_){return null;}
     },

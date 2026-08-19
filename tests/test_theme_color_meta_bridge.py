@@ -16,6 +16,8 @@ This bridge is the source of truth that native WKWebView wrappers
 (hermes-webui/hermes-swift-mac) read instead of pixel-sampling the page —
 overlay-resistant (modals/lightboxes don't poison it) and IPC-free.
 """
+
+import re
 from pathlib import Path
 
 
@@ -98,11 +100,20 @@ class TestBootJsThemeColorSync:
         src = BOOT.read_text(encoding="utf-8")
         # Path 1 — the early return must call the sync first.
         assert "if(!link){ _syncThemeColorMeta(); return; }" in src
-        # Path 2 — the trailing call must follow the link-href update.
-        assert (
-            "if(link.href!==want){ link.integrity=''; link.href=want; }\n"
-            "  _syncThemeColorMeta();"
-        ) in src
+        # Path 2 — the trailing call must follow the link-href update. Matched
+        # structurally rather than by exact source text: the comparison operand
+        # changed when the Prism theme moved from a CDN URL to a vendored path
+        # (link.href is absolute, so it is compared against a resolved URL now),
+        # and pinning the literal line made this test fail for a change that did
+        # not touch the invariant it exists to protect.
+        href_update = re.search(
+            r"link\.integrity\s*=\s*'';\s*link\.href\s*=\s*want;\s*\}\s*\n\s*_syncThemeColorMeta\(\);",
+            src,
+        )
+        assert href_update, (
+            "_syncThemeColorMeta() must be called immediately after the Prism "
+            "stylesheet href update, so the meta tag never lags the page"
+        )
 
     def test_apply_skin_calls_sync(self):
         """Switching skin (Default → Sienna → Sisyphus, etc.) recomputes --bg and

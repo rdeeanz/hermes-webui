@@ -17,16 +17,28 @@ function _currentSid() {
 }
 
 function _outlineAllowed() {
-  const compact = window.matchMedia && window.matchMedia('(max-width:900px)').matches;
   // The outline is a chat-view affordance only — never show the toggle or panel
   // while another MAIN panel (settings, tasks, insights, …) is active. _currentPanel
   // is owned by panels.js; treat an undefined/absent value as the chat default.
   // 'todos' is a sidebar-only panel that leaves the chat transcript in <main>, so
   // the outline stays valid there too (and switching to it emits no <main> class
   // mutation for the observer, so allowing it keeps the toggle stable).
+  //
+  // Viewport width is deliberately NOT part of this check any more. It used to
+  // exclude anything <=900px, which did not merely hide the floating rail — it
+  // made the outline unreachable on phones and tablets, with no alternative. The
+  // rail's geometry is still desktop-only (CSS keeps #outlineToggleBtn hidden
+  // there); what changed is that narrow viewports get the panel as a bottom
+  // sheet, reached from the composer's mobile config panel, instead of nothing.
   const panel = (typeof _currentPanel === 'undefined') ? 'chat' : (_currentPanel || 'chat');
   const onChatView = panel === 'chat' || panel === 'todos';
-  return window._showConversationOutline === true && !compact && onChatView;
+  return window._showConversationOutline === true && onChatView;
+}
+
+// Phone viewports present the outline as a bottom sheet; wider ones keep the
+// floating rail. HermesSheet decides which, so this does not branch on width.
+function _outlineSheetMode() {
+  return !!(window.HermesSheet && window.HermesSheet.isSheetMode());
 }
 
 function _syncOutlinePosition() {
@@ -40,13 +52,21 @@ function _syncOutlinePosition() {
 function applyConversationOutlinePreference() {
   const toggle = document.getElementById('outlineToggleBtn');
   const wrapper = document.getElementById('outlinePanelWrapper');
+  // The phone entry point lives in the composer's mobile config panel and must
+  // follow the same preference as the desktop rail — otherwise a tap on it would
+  // silently do nothing whenever the outline is switched off.
+  const mobileAction = document.getElementById('composerMobileOutlineAction');
   const enabled = _outlineAllowed();
   document.documentElement.dataset.conversationOutline = enabled ? 'enabled' : 'disabled';
   _syncOutlinePosition();
   if (toggle) toggle.hidden = !enabled;
+  if (mobileAction) mobileAction.style.display = enabled ? '' : 'none';
   if (!enabled) {
     _panelOpen = false;
-    if (wrapper) wrapper.hidden = true;
+    if (wrapper) {
+      if (window.HermesSheet) window.HermesSheet.dismiss(wrapper);
+      wrapper.hidden = true;
+    }
   }
 }
 
@@ -217,6 +237,11 @@ function toggleOutlinePanel() {
   if (_panelOpen) {
     _syncOutlinePosition();
     wrapper.hidden = false;
+    if (_outlineSheetMode()) {
+      window.HermesSheet.present(wrapper, {
+        opener: document.getElementById('composerMobileOutlineAction'),
+      });
+    }
     const sid = _currentSid();
     const panel = document.getElementById('outlinePanel');
     if (panel) panel.innerHTML = '<p class="outline-empty">' + t('outline_loading') + '</p>';
@@ -227,9 +252,24 @@ function toggleOutlinePanel() {
       _outlineSid = _currentSid();
     });
   } else {
+    if (window.HermesSheet) window.HermesSheet.dismiss(wrapper);
     wrapper.hidden = true;
   }
 }
+
+// The sheet can be dismissed without going through toggleOutlinePanel() — by the
+// backdrop, a swipe, or Escape. Mirror that back into _panelOpen, or the next tap
+// on the entry point would toggle the stale state and appear to do nothing.
+document.addEventListener('DOMContentLoaded', function () {
+  const wrapper = document.getElementById('outlinePanelWrapper');
+  if (!wrapper || typeof MutationObserver !== 'function') return;
+  new MutationObserver(function () {
+    if (_panelOpen && wrapper.style.display === 'none' && !wrapper.classList.contains('sheet-open')) {
+      _panelOpen = false;
+      wrapper.hidden = true;
+    }
+  }).observe(wrapper, { attributes: true, attributeFilter: ['class', 'style'] });
+});
 
 // Jump target exposed on window so inline onclick handlers can reach it.
 window._outlineJump = _jumpToMessage;

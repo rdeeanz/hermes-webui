@@ -1,9 +1,15 @@
-"""Regression test for #1850 — CSP connect-src must allow cdn.jsdelivr.net.
+"""Regression test for #1850 — CSP connect-src must allow the lazy CDN libraries.
 
-xterm.js, xterm-addon-fit, and xterm-addon-web-links are loaded from
-cdn.jsdelivr.net via <script> tags. Their bundled source maps also live on
-jsDelivr and are fetched via connect (not script load), so connect-src must
-include cdn.jsdelivr.net or browsers block the fetch and emit CSP violations.
+Originally this covered xterm.js, whose bundled source map was fetched from
+cdn.jsdelivr.net at runtime. xterm and Prism are vendored under static/vendor now
+(with sourceMappingURL stripped), so the remaining consumers are the two modules
+ui.js still imports lazily from the CDN: PDF.js (workspace PDF preview) and
+Mermaid (diagram rendering). Their fetches are subject to connect-src, so the
+policy must keep allowing them or the browser blocks the import and emits CSP
+violations.
+
+The grant is now path-scoped rather than whole-origin — see _CSP_JSDELIVR_LAZY_LIBS
+in api/helpers.py.
 """
 import re
 

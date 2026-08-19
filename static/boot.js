@@ -155,12 +155,42 @@ async function _finalizeComposerPrefillOnBoot(prefillIntent){
 // Mobile navigation.
 let _workspacePanelMode='closed'; // 'closed' | 'browse' | 'preview'
 
-function _isCompactWorkspaceViewport(){
-  return window.matchMedia('(max-width: 900px)').matches;
+// ── Responsive breakpoint contract (single source of truth) ──
+// Mirrors --bp-phone / --bp-tablet in static/style.css. CSS cannot read a custom
+// property from inside a media query, so the two numbers live in both files and
+// tests/test_breakpoint_contract.py fails if they ever drift apart.
+//
+//   <= PHONE  (640)  phone   : one column, sidebar drawer, right panel slide-over
+//   641..TABLET(1024) tablet : sidebar in-flow, right panel STILL slide-over
+//   >  TABLET (1024) desktop : three in-flow columns
+//
+// `isCompact` (phone OR tablet) is the predicate that decides whether app chrome
+// uses overlay semantics. It previously said 900px here while the slide-over CSS
+// stopped at 640px, which left the workspace panel unopenable between the two.
+const BP = Object.freeze({ PHONE: 640, TABLET: 1024 });
+
+function _mq(query){
+  try{ return window.matchMedia(query).matches; }catch(_){ return false; }
 }
 
+// Viewport is at most phone width.
 function _isPhoneWidthViewport(){
-  return window.matchMedia('(max-width: 640px)').matches;
+  return _mq(`(max-width: ${BP.PHONE}px)`);
+}
+
+// Viewport is in the tablet band (wider than a phone, narrower than desktop).
+function _isTabletWidthViewport(){
+  return _mq(`(min-width: ${BP.PHONE + 1}px) and (max-width: ${BP.TABLET}px)`);
+}
+
+// Viewport is wide enough for the full three-column in-flow layout.
+function _isDesktopWidthViewport(){
+  return _mq(`(min-width: ${BP.TABLET + 1}px)`);
+}
+
+// Phone OR tablet — anything that gets overlay chrome for the workspace panel.
+function _isCompactWorkspaceViewport(){
+  return !_isDesktopWidthViewport();
 }
 
 function _isTouchKeyboardViewport(){
@@ -509,6 +539,89 @@ function _installPwaSidebarSwipeGesture(){
 }
 _installPwaSidebarSwipeGesture();
 
+// ── Swipe-right to close the workspace slide-over ────────────────────────────
+//
+// The mirror of the left-edge swipe that opens the sidebar. Below --bp-tablet the
+// workspace panel is an overlay pinned to the right edge, and an overlay you can
+// only dismiss by hunting for a button feels stuck — every native app closes one
+// with the same gesture that opened it.
+//
+// Deliberately narrower than the sidebar gesture: it only starts on the panel
+// itself (so it cannot swallow transcript swipes), only when the panel is open,
+// and only in the compact band where the panel IS an overlay. On desktop the
+// panel is in-flow and has a resize handle, where a swipe would mean nothing.
+const _WS_SWIPE_CLAIM=12;             // px before we treat it as horizontal
+const _WS_SWIPE_TRIGGER=64;           // px of travel that dismisses
+const _WS_SWIPE_MAX_VERTICAL=56;      // beyond this it is a scroll, not a swipe
+let _wsPanelSwipe=null;
+
+function _wsPanelSwipeOpen(){
+  if(!_isCompactWorkspaceViewport()) return null;
+  const panel=document.querySelector('.rightpanel');
+  return (panel&&panel.classList.contains('mobile-open'))?panel:null;
+}
+
+function _onWsPanelSwipeStart(e){
+  const panel=_wsPanelSwipeOpen();
+  if(!panel) return;
+  const point=_pwaSidebarSwipePoint(e);
+  if(!point) return;
+  // Only gestures that begin inside the panel; anything else belongs to the
+  // transcript underneath.
+  if(!(e.target&&panel.contains(e.target))) return;
+  // A horizontally scrollable row inside the panel (a long path breadcrumb, a
+  // wide preview) owns its own horizontal gesture.
+  try{
+    const scroller=e.target.closest&&e.target.closest('*');
+    if(scroller&&scroller!==panel&&scroller.scrollWidth>scroller.clientWidth+1) return;
+  }catch(_){}
+  _wsPanelSwipe={startX:point.clientX,startY:point.clientY,claimed:false};
+}
+
+function _onWsPanelSwipeMove(e){
+  const swipe=_wsPanelSwipe;
+  if(!swipe) return;
+  const panel=_wsPanelSwipeOpen();
+  if(!panel){_wsPanelSwipe=null;return;}
+  const point=_pwaSidebarSwipePoint(e);
+  if(!point) return;
+  const dx=point.clientX-swipe.startX;
+  const dy=point.clientY-swipe.startY;
+  // Leftward or mostly-vertical: this is a scroll, hand it back.
+  if(dx<0||Math.abs(dy)>_WS_SWIPE_MAX_VERTICAL*1.5){_wsPanelSwipe=null;return;}
+  if(dx>=_WS_SWIPE_CLAIM&&dx>Math.abs(dy)*1.2) swipe.claimed=true;
+  if(!swipe.claimed) return;
+  // Track the finger so the gesture feels attached rather than fire-and-forget.
+  panel.style.transition='none';
+  panel.style.transform='translateX('+dx+'px)';
+  if(dx>=_WS_SWIPE_TRIGGER&&Math.abs(dy)<=_WS_SWIPE_MAX_VERTICAL){
+    _resetWsPanelTransform(panel);
+    _wsPanelSwipe=null;
+    if(typeof closeWorkspacePanel==='function') closeWorkspacePanel();
+  }
+}
+
+function _resetWsPanelTransform(panel){
+  if(!panel) return;
+  panel.style.transition='';
+  panel.style.transform='';
+}
+
+function _onWsPanelSwipeEnd(){
+  const panel=document.querySelector('.rightpanel');
+  // Below the trigger distance: spring back rather than leaving it half-open.
+  if(_wsPanelSwipe&&_wsPanelSwipe.claimed) _resetWsPanelTransform(panel);
+  _wsPanelSwipe=null;
+}
+
+function _installWorkspacePanelSwipeGesture(){
+  window.addEventListener('touchstart', _onWsPanelSwipeStart, {capture:true,passive:true});
+  window.addEventListener('touchmove', _onWsPanelSwipeMove, {capture:true,passive:true});
+  window.addEventListener('touchend', _onWsPanelSwipeEnd, {capture:true,passive:true});
+  window.addEventListener('touchcancel', _onWsPanelSwipeEnd, {capture:true,passive:true});
+}
+_installWorkspacePanelSwipeGesture();
+
 // ── Desktop sidebar collapse toggle ────────────────────────────────────────
 // Two discoverability paths into the same state:
 //   (1) Click the already-active rail icon → collapse / expand the sidebar.
@@ -518,8 +631,11 @@ _installPwaSidebarSwipeGesture();
 // State is persisted via localStorage and survives reloads + bfcache.
 const _SIDEBAR_COLLAPSED_KEY='hermes-webui-sidebar-collapsed';
 
+// NOTE: this is the *sidebar* boundary, not the three-column boundary — the
+// sidebar leaves drawer mode as soon as the viewport is wider than a phone, so
+// it keys off BP.PHONE. Use _isDesktopWidthViewport() for the layout boundary.
 function _isDesktopWidth(){
-  try{return window.matchMedia('(min-width:641px)').matches;}catch(_){return true;}
+  try{return window.matchMedia(`(min-width:${BP.PHONE + 1}px)`).matches;}catch(_){return true;}
 }
 
 function _isSidebarCollapsed(){
@@ -2783,12 +2899,20 @@ function _setResolvedTheme(isDark){
   document.documentElement.classList.toggle('dark',effectiveDark);
   const link=document.getElementById('prism-theme');
   if(!link){ _syncThemeColorMeta(); return; }
-  const want=effectiveDark
-    ?'https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css'
-    :'https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css';
-  // No SRI integrity on theme CSS — jsdelivr edge nodes serve different
-  // digests for the same pinned version, causing intermittent blocking (#1100).
-  if(link.href!==want){ link.integrity=''; link.href=want; }
+  // Prism themes are vendored (static/vendor/prismjs) rather than fetched from a
+  // CDN, so an air-gapped deploy keeps syntax highlighting. Carry the existing
+  // ?v= cache-buster across the swap: without it the swapped-in stylesheet drops
+  // from immutable far-future caching to max-age=300 on every theme toggle.
+  const _prismBase='static/vendor/prismjs/1.29.0/themes/';
+  const _prismVersionQuery=(link.getAttribute('href')||'').split('?')[1];
+  const _suffix=_prismVersionQuery?('?'+_prismVersionQuery):'';
+  const want=_prismBase+(effectiveDark?'prism-tomorrow.min.css':'prism.min.css')+_suffix;
+  // link.href reflects the RESOLVED absolute URL, so compare against the resolved
+  // form of `want` — comparing a relative string would never match and would
+  // re-assign (and re-fetch) the stylesheet on every theme sync.
+  let _wantAbs=want;
+  try{ _wantAbs=new URL(want,document.baseURI).href; }catch(_){ }
+  if(link.href!==_wantAbs){ link.integrity=''; link.href=want; }
   _syncThemeColorMeta();
 }
 
@@ -3929,3 +4053,171 @@ function _showServerStopped() {
   var stoppedMsg = (typeof t === 'function' ? t('settings_shutdown_stopped_message') : 'Server stopped. You can close this tab.');
   document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:var(--muted);font-family:var(--font-ui);font-size:14px"><p>' + stoppedMsg + '</p></div>';
 }
+
+// ── Bottom sheet controller ──────────────────────────────────────────────────
+//
+// Presents an element as a bottom sheet at phone width and leaves it as whatever
+// popover it already was above --bp-phone. Call sites do not branch on viewport:
+// they call present()/dismiss() and this decides how to draw it.
+//
+// The motivating case is saved prompts, which was hidden outright below 640px
+// because its anchored 280px popover cannot fit a phone screen — the feature was
+// simply unreachable there. A sheet is the presentation that fits, so features
+// can be re-homed instead of dropped.
+//
+// Behaviour on a phone: backdrop, swipe-down to dismiss, tap-outside to dismiss,
+// Escape to dismiss, focus trapped inside while open, and focus returned to the
+// opener afterwards.
+(function(){
+  'use strict';
+
+  var FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),' +
+                  'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  var _open = null;          // { el, opener, onKey, onBackdrop, pointer handlers }
+  var _backdrop = null;
+
+  function _sheetMode(){
+    // Same predicate the CSS uses; see the BP contract at the top of this file.
+    return typeof _isPhoneWidthViewport === 'function' ? _isPhoneWidthViewport() : false;
+  }
+
+  function _ensureBackdrop(){
+    if(_backdrop && _backdrop.isConnected) return _backdrop;
+    _backdrop = document.createElement('div');
+    _backdrop.className = 'mobile-sheet-backdrop';
+    document.body.appendChild(_backdrop);
+    return _backdrop;
+  }
+
+  function _focusables(el){
+    return Array.prototype.filter.call(el.querySelectorAll(FOCUSABLE), function(n){
+      return n.offsetParent !== null || n === document.activeElement;
+    });
+  }
+
+  function _trap(e){
+    if(!_open || e.key !== 'Tab') return;
+    var items = _focusables(_open.el);
+    if(!items.length) return;
+    var first = items[0], last = items[items.length - 1];
+    if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  }
+
+  function _onKey(e){
+    if(!_open) return;
+    if(e.key === 'Escape'){ e.stopPropagation(); dismiss(_open.el); return; }
+    _trap(e);
+  }
+
+  // Swipe-down to dismiss. Only starts when the sheet is already scrolled to the
+  // top, so a downward drag inside a scrolled list scrolls the list instead of
+  // fighting it for the gesture.
+  function _attachDrag(el){
+    var startY = 0, dy = 0, dragging = false;
+    function down(e){
+      if(el.scrollTop > 0) return;
+      startY = e.touches ? e.touches[0].clientY : e.clientY;
+      dy = 0; dragging = true;
+      el.classList.add('sheet-dragging');
+    }
+    function move(e){
+      if(!dragging) return;
+      var y = e.touches ? e.touches[0].clientY : e.clientY;
+      dy = Math.max(0, y - startY);
+      el.style.transform = 'translateY(' + dy + 'px)';
+    }
+    function up(){
+      if(!dragging) return;
+      dragging = false;
+      el.classList.remove('sheet-dragging');
+      el.style.transform = '';
+      // A short flick should not close it; roughly a third of the sheet's own
+      // height is the usual threshold and scales with content.
+      if(dy > Math.max(80, el.getBoundingClientRect().height / 3)) dismiss(el);
+    }
+    el.addEventListener('touchstart', down, {passive:true});
+    el.addEventListener('touchmove', move, {passive:true});
+    el.addEventListener('touchend', up);
+    el.addEventListener('touchcancel', up);
+    return function detach(){
+      el.removeEventListener('touchstart', down);
+      el.removeEventListener('touchmove', move);
+      el.removeEventListener('touchend', up);
+      el.removeEventListener('touchcancel', up);
+    };
+  }
+
+  // Show `el`. On a phone that means a bottom sheet; anywhere else it just makes
+  // the element visible and lets its existing popover CSS position it.
+  function present(el, opts){
+    if(!el) return false;
+    opts = opts || {};
+    if(_open && _open.el !== el) dismiss(_open.el);
+
+    if(!_sheetMode()){
+      el.style.display = opts.display || 'flex';
+      return false;
+    }
+
+    el.setAttribute('data-mobile-sheet', '');
+    el.style.display = 'flex';
+    el.classList.add('sheet-open', 'sheet-enter');
+    // Next frame: drop `sheet-enter` so the transform transition runs from
+    // off-screen to rest instead of the sheet simply appearing in place.
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){ el.classList.remove('sheet-enter'); });
+    });
+
+    var backdrop = _ensureBackdrop();
+    backdrop.classList.add('visible');
+    var onBackdrop = function(){ dismiss(el); };
+    backdrop.addEventListener('click', onBackdrop);
+
+    var detachDrag = _attachDrag(el);
+    document.addEventListener('keydown', _onKey, true);
+
+    _open = { el: el, opener: (opts.opener || document.activeElement), onBackdrop: onBackdrop, detachDrag: detachDrag };
+
+    var items = _focusables(el);
+    if(items.length) items[0].focus();
+    else { el.setAttribute('tabindex', '-1'); el.focus(); }
+    return true;
+  }
+
+  function dismiss(el){
+    el = el || (_open && _open.el);
+    if(!el) return;
+    el.classList.remove('sheet-open', 'sheet-enter', 'sheet-dragging');
+    el.style.transform = '';
+    el.style.display = 'none';
+    if(_open && _open.el === el){
+      if(_backdrop){
+        _backdrop.classList.remove('visible');
+        if(_open.onBackdrop) _backdrop.removeEventListener('click', _open.onBackdrop);
+      }
+      if(_open.detachDrag) _open.detachDrag();
+      document.removeEventListener('keydown', _onKey, true);
+      var opener = _open.opener;
+      _open = null;
+      // Return focus so keyboard and screen-reader users are not dumped at the
+      // top of the document.
+      if(opener && typeof opener.focus === 'function' && opener.isConnected){
+        try{ opener.focus(); }catch(_){ }
+      }
+    }
+  }
+
+  function isOpen(el){
+    if(!_open) return false;
+    return el ? _open.el === el : true;
+  }
+
+  // A rotation or a window resize can cross the phone boundary while a sheet is
+  // open, which would leave a stranded backdrop over a desktop popover.
+  window.addEventListener('resize', function(){
+    if(_open && !_sheetMode()) dismiss(_open.el);
+  });
+
+  window.HermesSheet = { present: present, dismiss: dismiss, isOpen: isOpen, isSheetMode: _sheetMode };
+})();

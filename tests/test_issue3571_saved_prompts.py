@@ -15,36 +15,40 @@ def read(rel: str) -> str:
     return (REPO / rel).read_text(encoding="utf-8")
 
 
-def test_saved_prompts_button_hidden_on_mobile():
-    """#btnSavedPrompts (and its popup) must be display:none inside a mobile
-    max-width:640px @media block — desktop-only affordance. Verified by walking
-    each media block and confirming the hide rule lives inside a 640px-max one."""
+def test_saved_prompts_is_reachable_on_mobile():
+    """Saved prompts must have a phone entry point.
+
+    This test previously asserted the opposite — that #btnSavedPrompts is
+    `display:none` inside a max-width:640px block, described as a "desktop-only
+    affordance". That was not an adaptation for small screens: it left the
+    feature with no entry point at all on a phone.
+
+    The underlying constraint was real (the popover is an anchored 280px card
+    that cannot fit a 375px viewport), so the fix is a different presentation
+    rather than a hidden button: the composer's mobile config panel opens the
+    same surface as a bottom sheet. The desktop popover geometry may still be
+    suppressed on phones — what may not happen is suppressing it with nothing
+    in its place.
+
+    See tests/test_mobile_feature_parity.py for the sheet contract itself.
+    """
+    html = read("static/index.html")
     css = read("static/style.css")
-    found = False
-    for m in re.finditer(r"@media([^{]*)\{", css):
-        cond = m.group(1)
-        if "max-width" not in cond or "640px" not in cond:
-            continue
-        # Slice to this block's matching close brace.
-        depth = 0
-        i = m.end() - 1
-        end = len(css)
-        while i < len(css):
-            if css[i] == "{":
-                depth += 1
-            elif css[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    end = i
-                    break
-            i += 1
-        block = css[m.end():end]
-        if re.search(r"#btnSavedPrompts[^{]*\{[^}]*display:\s*none", block):
-            found = True
-            break
-    assert found, (
-        "#btnSavedPrompts must be hidden on mobile inside a max-width:640px block "
-        "(desktop-only saved-prompts feature)"
+
+    assert 'id="composerMobileSavedPromptsAction"' in html, (
+        "saved prompts needs a phone entry point in the composer's mobile "
+        "config panel"
+    )
+    assert 'onclick="toggleSavedPromptsPopup()"' in html, (
+        "the phone entry point must open the same surface as the desktop control"
+    )
+    # The old blanket hide must be gone; only the popover geometry may be scoped.
+    assert "#btnSavedPrompts,.saved-prompts-popup{display:none!important;}" not in css, (
+        "the saved-prompts button and popup must not be hidden outright on phones"
+    )
+    assert ".saved-prompts-popup:not(.sheet-open){display:none!important;}" in css, (
+        "the desktop popover geometry should still be suppressed while the sheet "
+        "presentation is active"
     )
 
 
