@@ -3166,6 +3166,19 @@
     .topbar-chips{flex-wrap:nowrap;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
     .topbar-chips .chip,.topbar-chips .ws-chip,.topbar-chips button{font-size:11px!important;padding:4px 8px!important;white-space:nowrap;}
     .settings-main{padding:18px 16px;}
+    /* Touch-target repairs found by auditing every Control Center panel at
+       393px with a real browser (tests/browser_responsive.py enforces the same
+       floor on the chat surface).
+
+       Scoped to `main` on purpose: the workspace panel's own header buttons must
+       NOT grow to 44px — they live in a 300px slide-over whose header would
+       overflow, which is why test_mobile_layout guards against exactly that. */
+    main .panel-head-btn{width:44px;height:44px;min-width:44px;min-height:44px;border-radius:8px;}
+    /* Kanban's header packs four of these; let them wrap rather than overflow. */
+    main .panel-header .panel-actions{flex-wrap:wrap;row-gap:4px;}
+    /* 10px padding around a 13px line box lands at 37px. */
+    .settings-action-btn{min-height:44px;}
+    .logs-copy,.logs-copy.compact{min-height:44px;padding-top:0;padding-bottom:0;}
     .hermes-action-grid{grid-template-columns:1fr;}
     /* #4856: use overflow-x:clip, NOT hidden. `overflow-x:hidden` forces
        overflow-y from visible to auto (CSS spec: the two axes can't be
