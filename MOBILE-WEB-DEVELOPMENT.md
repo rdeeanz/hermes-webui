@@ -211,8 +211,24 @@ Test lama yang mengunci perilaku lama **diperbarui, bukan dihapus**, dan sekaran
 menegakkan kontrak yang sudah diperbaiki:
 `test_issue5545_three_panel_layout.py` (kini melarang `.rightpanel` disembunyikan
 di lebar mana pun), `test_mobile_layout.py`, `test_issue1100_prism_sri.py`,
-`test_sidebar_collapse_toggle.py`, `test_theme_color_meta_bridge.py`, dan lima
+`test_sidebar_collapse_toggle.py`, `test_theme_color_meta_bridge.py`,
+`test_issue3571_saved_prompts.py`, `test_issue2124_outline_panel.py`, dan lima
 test CSP.
+
+Dua test lain diperbaiki karena **rapuh**, bukan karena kontraknya berubah:
+`test_pwa_manifest_csp.py` dan `test_issue4553_mobile_transcript_overflow.py`
+sama-sama memotong sejumlah karakter tetap dari sumber (1.000 dan 5.000) alih-alih
+mem-parsing strukturnya, sehingga penambahan apa pun di atas target membuatnya
+gagal. Yang pertama kini membangun policy CSP sungguhan lewat
+`_build_csp_enforced_policy()`; yang kedua menelusuri blok media dengan
+penyeimbangan kurung.
+
+**Catatan metodologi.** Baseline regresi pertama saya cacat: `git stash` tidak
+membatalkan commit, jadi perbandingannya sebenarnya melawan kode saya sendiri
+dan melaporkan "0 regresi" secara keliru. Baseline yang benar memakai
+`git worktree` pada commit sebelum perubahan. Setelah diperbaiki, himpunan
+kegagalan sama persis dengan baseline (50 = 50; seluruhnya kegagalan environment
+playwright yang memang sudah ada di sandbox ini).
 
 ### 0.6 Sisa kerja setelah Fase 1–2
 
