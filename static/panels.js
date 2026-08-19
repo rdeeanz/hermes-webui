@@ -9674,6 +9674,16 @@ async function loadSettingsPanel(){
     }
     const notifCb=$('settingsNotificationsEnabled');
     if(notifCb){notifCb.checked=!!settings.notifications_enabled;notifCb.addEventListener('change',_schedulePreferencesAutosave,{once:false});}
+    // Push state lives in the browser (the PushManager subscription) and on the
+    // server (the stored endpoint), never in the settings payload — so it is not
+    // autosaved with the other preferences; toggling it performs the
+    // subscribe/unsubscribe directly.
+    const pushCb=$('settingsPushEnabled');
+    if(pushCb&&!pushCb.dataset.bound){
+      pushCb.dataset.bound='1';
+      pushCb.addEventListener('change',()=>{ if(typeof onPushToggleChanged==='function') onPushToggleChanged(); });
+    }
+    if(typeof updatePushSettingsUI==='function') updatePushSettingsUI().catch(()=>{});
     // show_thinking has no settings panel checkbox — controlled via /reasoning show|hide
     const sidebarDensitySel=$('settingsSidebarDensity');
     if(sidebarDensitySel){
@@ -13313,7 +13323,13 @@ async function _gatewayAction(action){
 const _origSwitchSettings=switchSettingsSection;
 switchSettingsSection=function(name, opts){
   _origSwitchSettings(name, opts);
-  if(name==='preferences') updateNotificationPermissionStatus();
+  if(name==='preferences'){
+    updateNotificationPermissionStatus();
+    // Reflects the CURRENT browser subscription rather than a stored setting:
+    // the user may have revoked permission or cleared site data since, and a
+    // toggle that claims to be on when no subscription exists is a lie.
+    if(typeof updatePushSettingsUI==='function') updatePushSettingsUI().catch(()=>{});
+  }
   if(name==='system'){loadMcpServers();loadMcpTools();loadGatewayStatus();}
 };
 
@@ -13425,6 +13441,191 @@ async function _restoreCheckpoint(workspace,checkpoint,message){
   }
 }
 
+
+// ── Web Push ─────────────────────────────────────────────────────────────────
+//
+// Separate from the "Browser notifications" setting above it, and the difference
+// is the whole point: that one is raised by the page and therefore only works
+// while a page is alive. This one is delivered by the OS push service and
+// reaches a closed browser — which is the case that actually matters on a phone,
+// where the browser gets evicted while the screen is off.
+//
+// The subscription is created ONLY when the user turns the toggle on. Asking for
+// notification permission on page load is an anti-pattern and is denied by most
+// users, which would then be sticky.
+
+function _pushSupported(){
+  return !!(window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+}
+
+// iOS delivers push to installed PWAs only (16.4+); a Safari tab never receives
+// one. Saying so up front beats a toggle that appears to work and silently does
+// nothing.
+function _isIOSLike(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent||'')
+    || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+}
+function _isInstalledPwa(){
+  try{
+    return window.navigator.standalone===true
+      || (window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches);
+  }catch(_){ return false; }
+}
+
+function _b64urlToUint8Array(base64url){
+  // PushManager wants the VAPID key as bytes; the server sends unpadded base64url.
+  const padding='='.repeat((4-base64url.length%4)%4);
+  const base64=(base64url+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(base64);
+  const out=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+  return out;
+}
+
+function _setPushStatus(text,isError){
+  const el=$('pushStatus');
+  if(!el) return;
+  el.textContent=text||'';
+  el.style.color=isError?'var(--error)':'var(--muted)';
+}
+
+async function _currentPushSubscription(){
+  if(!_pushSupported()) return null;
+  const reg=await navigator.serviceWorker.getRegistration();
+  if(!reg||!reg.pushManager) return null;
+  return reg.pushManager.getSubscription();
+}
+
+async function subscribeToPush(){
+  if(!_pushSupported()){
+    _setPushStatus(t('push_unsupported')||'Push is not supported in this browser.',true);
+    return false;
+  }
+  // Permission first: subscribing without it throws, and the thrown error is
+  // less legible than the permission state itself.
+  let perm=Notification.permission;
+  if(perm==='default') perm=await Notification.requestPermission();
+  if(perm!=='granted'){
+    _setPushStatus(t('push_permission_denied')||'Notification permission denied.',true);
+    return false;
+  }
+  const reg=await navigator.serviceWorker.getRegistration();
+  if(!reg||!reg.pushManager){
+    _setPushStatus(t('push_no_service_worker')||'Service worker unavailable.',true);
+    return false;
+  }
+  let keyInfo;
+  try{
+    keyInfo=await api('/api/push/vapid-key');
+  }catch(_e){
+    _setPushStatus(t('push_server_unavailable')||'Server could not provide a push key.',true);
+    return false;
+  }
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub){
+    sub=await reg.pushManager.subscribe({
+      // Required by every browser: a push that cannot show a notification is
+      // not something this app ever sends.
+      userVisibleOnly:true,
+      applicationServerKey:_b64urlToUint8Array(keyInfo.key),
+    });
+  }
+  await api('/api/push/subscribe',{method:'POST',body:JSON.stringify({subscription:sub.toJSON()})});
+  _setPushStatus(t('push_active')||'Active on this device.');
+  return true;
+}
+
+async function unsubscribeFromPush(){
+  const sub=await _currentPushSubscription();
+  if(!sub){ _setPushStatus(''); return true; }
+  const endpoint=sub.endpoint;
+  try{ await sub.unsubscribe(); }catch(_e){}
+  // Tell the server even if the local unsubscribe failed — a subscription it
+  // keeps pushing to after the user opted out is the worse failure.
+  try{ await api('/api/push/subscribe',{method:'DELETE',body:JSON.stringify({endpoint})}); }catch(_e){}
+  _setPushStatus('');
+  return true;
+}
+
+async function sendTestPush(){
+  const btn=$('pushTestButton');
+  if(btn) btn.disabled=true;
+  try{
+    // Subscribe on demand so "Send test push" works without first toggling —
+    // otherwise the button's only outcome would be an error telling the user to
+    // go and flip a switch they can see right next to it.
+    if(!(await _currentPushSubscription())){
+      if(!(await subscribeToPush())) return;
+    }
+    await api('/api/push/test',{method:'POST',body:JSON.stringify({})});
+    _setPushStatus(t('push_test_sent')||'Test push sent.');
+  }catch(e){
+    _setPushStatus((e&&e.message)||(t('push_test_failed')||'Test push failed.'),true);
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+
+async function updatePushSettingsUI(){
+  const cb=$('settingsPushEnabled');
+  const hint=$('pushIosHint');
+  const btn=$('pushTestButton');
+  if(!cb) return;
+  const supported=_pushSupported();
+  cb.disabled=!supported;
+  if(btn) btn.disabled=!supported;
+  if(hint) hint.style.display=(_isIOSLike()&&!_isInstalledPwa())?'block':'none';
+  if(!supported){
+    _setPushStatus(
+      window.isSecureContext===false
+        ? (t('push_needs_https')||'Push requires HTTPS (or localhost).')
+        : (t('push_unsupported')||'Push is not supported in this browser.'),
+      true);
+    cb.checked=false;
+    return;
+  }
+  const sub=await _currentPushSubscription();
+  cb.checked=!!sub;
+  _setPushStatus(sub?(t('push_active')||'Active on this device.'):'');
+}
+
+async function onPushToggleChanged(){
+  const cb=$('settingsPushEnabled');
+  if(!cb) return;
+  cb.disabled=true;
+  try{
+    if(cb.checked){
+      const ok=await subscribeToPush();
+      cb.checked=!!ok;
+    }else{
+      await unsubscribeFromPush();
+    }
+  }catch(e){
+    _setPushStatus((e&&e.message)||String(e),true);
+    cb.checked=!(cb.checked);
+  }finally{
+    cb.disabled=false;
+  }
+}
+
+// A push service can rotate a subscription on its own; sw.js relays that here.
+// `typeof` guard, not a truthiness check: panels.js is also evaluated outside a
+// browser (the kanban renderer tests run it in a bare `vm` context), where a
+// bare `navigator` reference is a ReferenceError at module evaluation and takes
+// the whole file down.
+if(typeof navigator!=='undefined'&&navigator.serviceWorker&&navigator.serviceWorker.addEventListener){
+  navigator.serviceWorker.addEventListener('message',(event)=>{
+    if(event&&event.data&&event.data.type==='hermes:push-resubscribe'){
+      _currentPushSubscription().then(sub=>{ if(!sub) subscribeToPush().catch(()=>{}); });
+    }
+  });
+}
+
+window.subscribeToPush=subscribeToPush;
+window.unsubscribeFromPush=unsubscribeFromPush;
+window.sendTestPush=sendTestPush;
+window.updatePushSettingsUI=updatePushSettingsUI;
+window.onPushToggleChanged=onPushToggleChanged;
 
 function updateNotificationPermissionStatus(){
   const el=$('notificationPermissionStatus');

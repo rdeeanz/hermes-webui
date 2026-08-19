@@ -13513,6 +13513,22 @@ def handle_get(handler, parsed) -> bool:
     if parsed.path == "/api/prompts":
         return j(handler, {"prompts": _load_saved_prompts()})
 
+    if parsed.path == "/api/push/vapid-key":
+        # The browser needs this before it can call PushManager.subscribe(). It
+        # is a PUBLIC key by design — it identifies this server to the push
+        # service and is embedded in every subscription — so serving it to an
+        # authenticated client discloses nothing.
+        from api import push as push_api
+
+        try:
+            return j(handler, {
+                "key": push_api.vapid_public_key_b64(),
+                "subscriptions": len(push_api.list_subscriptions(get_active_profile_name())),
+            })
+        except Exception:
+            logger.warning("VAPID key unavailable", exc_info=True)
+            return bad(handler, "push is unavailable on this server", 503)
+
     if parsed.path == "/api/session/export":
         return _handle_session_export(handler, parsed)
 
@@ -14448,6 +14464,38 @@ def handle_post(handler, parsed) -> bool:
         prompts.append(new_prompt)
         _save_saved_prompts(prompts)
         return j(handler, {"ok": True, "prompt": new_prompt})
+
+    if parsed.path == "/api/push/subscribe":
+        from api import push as push_api
+
+        subscription = body.get("subscription")
+        if not isinstance(subscription, dict):
+            return bad(handler, "subscription is required")
+        if not push_api.add_subscription(subscription, get_active_profile_name()):
+            # Malformed rather than unauthorised: the browser handed us something
+            # that is not a usable subscription, and storing it would only fail
+            # later with no obvious cause.
+            return bad(handler, "subscription is malformed")
+        return j(handler, {"ok": True})
+
+    if parsed.path == "/api/push/test":
+        # Lets a user confirm end-to-end delivery from Settings. Sent
+        # synchronously, unlike the agent-path notifications, because the whole
+        # point is to report back whether it actually worked.
+        from api import push as push_api
+
+        profile = get_active_profile_name()
+        if not push_api.list_subscriptions(profile):
+            return bad(handler, "no push subscriptions registered for this profile")
+        result = push_api.notify({
+            "title": "Hermes",
+            "body": "Push notifications are working.",
+            "tag": "hermes-push-test",
+            "url": "/",
+        }, profile)
+        if not result.get("sent"):
+            return bad(handler, "push delivery failed; see server logs", 502)
+        return j(handler, {"ok": True, **result})
 
     if parsed.path == "/api/share/create":
         sid = str(body.get("session_id") or "").strip()
@@ -16980,6 +17028,17 @@ def handle_delete(handler, parsed) -> bool:
         prompts = [p for p in _load_saved_prompts() if p.get("id") != pid]
         _save_saved_prompts(prompts)
         return j(handler, {"ok": True})
+
+    if parsed.path == "/api/push/subscribe":
+        from api import push as push_api
+
+        endpoint = str(body.get("endpoint") or "").strip()
+        if not endpoint:
+            return bad(handler, "endpoint is required")
+        # Removing an endpoint that is already gone is the expected outcome of
+        # unsubscribing twice, so it is reported as success rather than 404.
+        removed = push_api.remove_subscription(endpoint, get_active_profile_name())
+        return j(handler, {"ok": True, "removed": removed})
 
     if parsed.path.startswith("/api/kanban/"):
         from api.kanban_bridge import handle_kanban_delete

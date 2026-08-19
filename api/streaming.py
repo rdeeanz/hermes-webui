@@ -286,6 +286,57 @@ def _stream_writeback_stage(timings, name, *, clock=time.perf_counter):
             pass
 
 
+
+# ── Web push helpers ─────────────────────────────────────────────────────────
+# Kept small and exception-free: they run on the turn-completion path, where a
+# notification detail going wrong must not surface as a failed turn.
+
+def _push_bot_name() -> str:
+    try:
+        from api.config import load_settings
+
+        name = str((load_settings() or {}).get('bot_name') or '').strip()
+        return name or 'Hermes'
+    except Exception:
+        return 'Hermes'
+
+
+def _push_profile_name():
+    try:
+        from api.profiles import get_active_profile_name
+
+        return get_active_profile_name()
+    except Exception:
+        return None
+
+
+def _push_turn_summary(session, limit: int = 140) -> str:
+    """First line of the assistant's reply, for the notification body.
+
+    A notification body is read on a lock screen, so it is one line and short.
+    Falling back to a generic string matters: an empty body renders as a
+    notification that says nothing at all.
+    """
+    try:
+        for message in reversed(getattr(session, 'messages', None) or []):
+            if not isinstance(message, dict) or message.get('role') != 'assistant':
+                continue
+            content = message.get('content')
+            if isinstance(content, list):
+                content = ' '.join(
+                    str(part.get('text', ''))
+                    for part in content
+                    if isinstance(part, dict) and part.get('type') == 'text'
+                )
+            text = ' '.join(str(content or '').split())
+            if text:
+                return text[:limit] + ('…' if len(text) > limit else '')
+            break
+    except Exception:
+        pass
+    return 'Response ready.'
+
+
 def _log_stream_writeback_timings(
     session_id,
     stream_id,
@@ -11584,6 +11635,25 @@ def _run_agent_streaming(
                     _done_payload['terminal_state'] = 'tool_limit_reached'
                     _done_payload['terminal_reason'] = 'max_iterations'
                 put('done', _done_payload)
+                # ── Web push: the turn finished ──
+                # The page raises its own notification when it is merely
+                # backgrounded; this covers the case it cannot — no page alive at
+                # all, because the phone evicted the browser while the screen was
+                # off. Fire-and-forget on a daemon thread: a push service being
+                # slow must never hold up a turn, and any failure stays inside
+                # notify().
+                try:
+                    from api import push as _push
+
+                    _push.notify_async({
+                        'title': _push_bot_name(),
+                        'body': _push_turn_summary(s),
+                        'tag': f'hermes-{session_id}',
+                        'kind': 'turn_complete',
+                        'url': f'/session/{session_id}',
+                    }, _push_profile_name())
+                except Exception:
+                    logger.debug("Web push (turn complete) failed to dispatch", exc_info=True)
                 # Emit one last metering packet for the live message-header TPS label.
                 meter_stats = meter().get_stats(stream_id)
                 meter_stats['session_id'] = session_id
