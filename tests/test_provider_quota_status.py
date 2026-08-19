@@ -1271,7 +1271,9 @@ def test_provider_quota_i18n_keys_exist_for_all_locales():
     assert locale_count >= 1
     assert "provider_quota_retry_after" in keys
     for key in keys:
-        assert len(re.findall(rf"^\s+{re.escape(key)}:", i18n, re.MULTILINE)) == locale_count, key
+        # See the note below: `>=` so a partial locale translating one of these
+        # is an improvement rather than a test failure.
+        assert len(re.findall(rf"^\s+{re.escape(key)}:", i18n, re.MULTILINE)) >= locale_count, key
 
 
 def test_settings_label_and_description_i18n_keys_exist_for_all_locales():
@@ -1290,7 +1292,10 @@ def test_settings_label_and_description_i18n_keys_exist_for_all_locales():
     assert "settings_label_fade_text_effect" in keys
     assert "settings_desc_fade_text_effect" in keys
     for key in keys:
-        assert len(re.findall(rf"^\s+{re.escape(key)}:", i18n, re.MULTILINE)) == locale_count, key
+        # `>=`, not `==`: a partial locale (tests/locale_contract.py) is not
+        # required to carry these keys but is free to translate some of them, so
+        # the invariant is that no fully-translated locale is missing one.
+        assert len(re.findall(rf"^\s+{re.escape(key)}:", i18n, re.MULTILINE)) >= locale_count, key
 
 
 def test_provider_quota_styles_exist():

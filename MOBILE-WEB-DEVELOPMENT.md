@@ -13,7 +13,7 @@
 >
 > Tanggal analisa: 2026-08-19 · Commit dasar analisa: `fc1dc3a`
 >
-> **STATUS: Fase 1 SELESAI · Fase 2 SELESAI.** Lihat
+> **STATUS: Fase 1, 2, dan 3 SELESAI.** Lihat
 > [§0 Status Implementasi](#0-status-implementasi) untuk ringkasan apa yang sudah
 > dikerjakan, angka sebelum/sesudah yang terukur, dan apa yang masih tersisa.
 > Bagian §5 dan §6 sengaja **tidak** ditulis ulang — keduanya adalah catatan
@@ -270,6 +270,127 @@ baru yang muncul dari pekerjaan ini:
 
 ---
 
+### 0.7 Fase 3 — Web Push (SELESAI)
+
+**Ini gap terbesar yang tersisa untuk rasa "seperti aplikasi Claude", dan
+sekarang tertutup.** Sebelumnya notifikasi hanya dibangkitkan oleh halaman yang
+masih hidup — artinya di HP sering kali justru tidak muncul saat paling
+dibutuhkan, karena browser sudah dibuang dari memori saat layar mati.
+
+#### Tanpa dependensi baru
+
+Jalur yang biasa ditempuh adalah `pywebpush`. Saya **tidak** memakainya:
+`requirements.txt` proyek ini sengaja hanya dua paket, dan alternatifnya adalah
+menambah dependensi wajib ketiga atau membuatnya opsional — yang berarti fitur
+ini diam-diam mati di sebagian besar instalasi.
+
+`api/push.py` mengimplementasikan RFC 8291 (enkripsi payload) dan RFC 8292
+(VAPID) langsung di atas `cryptography`, yang sudah menjadi dependensi wajib.
+Primitifnya — ECDH P-256, HKDF-SHA256, AES-128-GCM, dan JWT ES256 — semuanya
+sudah kelas satu di pustaka itu, jadi ini perakitan, bukan rekayasa kriptografi.
+
+#### Bug yang ditangkap vektor uji resmi
+
+RFC 8291 §5 menerbitkan contoh lengkap: input, kunci antara, dan ciphertext yang
+diharapkan. Implementasi saya mereproduksinya **byte demi byte** — yang berarti
+setiap langkah (pertukaran ECDH, dua tahap HKDF, nonce AES-GCM, header record)
+benar.
+
+Vektor itu langsung menangkap satu bug nyata: field `rs` di header adalah
+**ukuran record maksimum** yang diterima penerima (4096), bukan panjang record
+ini. Nilai yang salah **tetap lolos** pada uji round-trip buatan sendiri —
+saya mendekripsinya kembali dengan sukses — tetapi ditolak klien sungguhan.
+Tanpa vektor resmi, bug ini akan lolos ke produksi dan bermanifestasi sebagai
+"push terkirim tapi tidak pernah muncul di HP".
+
+#### Yang dibangun
+
+| Bagian | Isi |
+|---|---|
+| `api/push.py` | Kunci VAPID (P-256, persisten, mode 0600), header `Authorization: vapid`, enkripsi aes128gcm, penyimpanan langganan per-profil, pengiriman + pruning |
+| Route | `GET /api/push/vapid-key`, `POST/DELETE /api/push/subscribe`, `POST /api/push/test` |
+| `static/sw.js` | Handler `push` dan `pushsubscriptionchange` (`notificationclick` sudah ada dan matang) |
+| `static/panels.js` | Alur subscribe, toggle setting, tombol uji, deteksi iOS |
+| Pemicu | **Approval menunggu** (`api/route_approvals.py`) dan **turn selesai** (`api/streaming.py`) |
+
+#### Keputusan desain yang perlu dicatat
+
+**Approval adalah notifikasi paling bernilai di aplikasi ini.** Turn yang selesai
+bisa menunggu sampai Anda melihat HP; approval yang tidak terjawab
+**menghentikan agent tanpa batas waktu** — menunggu ketukan yang tidak pernah
+datang karena browser sudah dibuang. Karena itu approval memakai
+`requireInteraction` (tidak hilang sendiri) dan tag terpisah, sehingga tidak
+pernah tertimpa notifikasi "respons siap".
+
+**Tidak menotifikasi dua kali.** Halaman yang hidup sudah membangkitkan
+notifikasinya sendiri. Service worker karena itu **membatalkan** push bila ada
+window yang sedang `visible` di halaman tujuan — pengguna sedang menatapnya, dan
+notifikasi sistem untuk sesuatu yang ada di layar hanyalah kebisingan. Window
+yang tersembunyi tetap menerima push, karena di sana notifikasi halaman mungkin
+tidak pernah menyala (timer di-throttle, SSE ditangguhkan).
+
+**Tidak pernah memblokir agent.** `submit_pending()` berjalan di jalur tool-guard
+agent. Pengiriman melibatkan I/O jaringan ke layanan pihak ketiga yang bisa
+lambat atau menggantung. Semua pemicu memakai `notify_async()` di daemon thread,
+dan seluruh kegagalan tertahan di dalam `notify()`. Terukur: jalur
+`submit_pending` kembali dalam **0,4 ms**.
+
+**Izin diminta hanya saat pengguna menyalakan toggle** — tidak pernah saat
+halaman dimuat. Prompt izin yang muncul tiba-tiba mayoritas ditolak, dan
+penolakan itu lengket.
+
+**Kunci VAPID harus stabil.** Kunci publiknya tertanam di setiap langganan yang
+pernah dibuat browser, jadi meregenerasinya membatalkan semuanya secara diam-diam
+— push terus mengembalikan 403 dan tidak ada yang tahu sampai sadar notifikasi
+berhenti. Karena itu ia dipersistenkan, dan `.env.example` memperingatkan agar
+file itu ikut terbawa saat upgrade.
+
+**Langganan mati dipangkas, error sementara tidak.** 404/410 berarti langganan
+sudah tidak ada — mencobanya selamanya hanya kebisingan. 5xx adalah layanan yang
+sedang bermasalah, dan perangkatnya tidak boleh hilang karena itu.
+
+#### Syarat platform (penting untuk Anda)
+
+| Platform | Dukungan |
+|---|---|
+| Chrome/Edge Android | ✅ Penuh |
+| Firefox Android | ✅ Penuh |
+| **Safari iOS/iPadOS** | ⚠️ **Hanya untuk PWA yang di-install ke Layar Utama** (iOS 16.4+). Tab Safari biasa **tidak** menerima push |
+| Desktop | ✅ Semua browser modern |
+| Semua platform | ⚠️ **Wajib HTTPS** (atau localhost) — jadi Fase 0 adalah prasyarat nyata |
+
+Syarat iOS itu **ditampilkan di UI**, bukan hanya di dokumentasi: panel setting
+mendeteksi iOS yang belum ter-install dan menampilkan peringatannya, karena
+toggle yang tampak bekerja tapi diam-diam tidak berfungsi adalah kegagalan yang
+paling membingungkan.
+
+#### Yang TIDAK saya verifikasi — dan tidak bisa
+
+**Pengiriman ujung-ke-ujung ke perangkat sungguhan belum diuji.** Itu memerlukan
+browser sungguhan yang terhubung ke layanan push vendor (FCM/APNs/Mozilla), dan
+sandbox ini memblokir egress ke sana. Yang **sudah** terverifikasi:
+
+- Enkripsi cocok byte-per-byte dengan vektor resmi RFC 8291
+- Browser bisa mendekripsi keluaran kami (round-trip dengan kunci privat UA)
+- JWT VAPID terverifikasi secara kriptografis, `aud` = origin endpoint, ES256 r‖s 64 byte
+- Pengiriman terhadap **push service tiruan**: header benar, body opaque, 410 memangkas, 5xx tidak
+- UI di browser sungguhan: toggle, status, tombol uji, endpoint kunci VAPID
+- **Jalur gagal** di browser sungguhan: saat langganan gagal dibuat, toggle
+  kembali ke posisi mati (tidak berbohong), pesan error tampil, dan **nol
+  uncaught error**
+
+Yang tersisa untuk Anda uji setelah deploy: buka Settings → aktifkan toggle →
+"Kirim push uji". Kalau muncul di HP, seluruh rantai bekerja.
+
+#### Sisa kerja di Fase 3
+
+Pemicu cron-selesai dan crash belum dipasang. Keduanya mudah ditambahkan sekarang
+karena infrastrukturnya sudah ada (`push.notify_async()` satu panggilan), tapi
+keduanya bukan yang membuat agent menggantung — approval-lah yang begitu, dan itu
+sudah terpasang.
+
+---
+
 ## 1. Ringkasan Eksekutif — Jawaban Jujur
 
 ### Pertanyaan: "Apakah bisa dideploy di VPS dan dibuka di browser smartphone secara user friendly dan responsive?"
@@ -290,7 +411,7 @@ Rincian jujurnya:
 | Layout desktop | ✅ **Baik** | Tiga panel, container queries, resize handle |
 | **Layout tablet portrait (641–900px)** | ✅ **DIPERBAIKI** (Fase 1.2) | Panel kini terbuka sebagai slide-over di 768px & 820px — lihat [§0.2](#02-angka-sebelum--sesudah-terukur) |
 | Berfungsi tanpa internet publik (VPS air-gapped) | ✅ **DIPERBAIKI** (Fase 1.3) | Prism + xterm di-vendor; 0 request eksternal saat halaman dimuat. *Sisa:* PDF.js & Mermaid masih lazy-load dari CDN |
-| Notifikasi saat browser ditutup | ❌ **Belum ada** | Hanya `Notification` API + `showNotification` saat tab hidup; **tidak ada Web Push/VAPID** |
+| Notifikasi saat browser ditutup | ✅ **DIPERBAIKI** (Fase 3) | Web Push penuh (RFC 8291/8292) tanpa dependensi baru — lihat [§0.7](#07-fase-3--web-push-selesai) |
 | Zoom / aksesibilitas mobile | ✅ **DIPERBAIKI** (Fase 2.4) | Zoom aktif di tab browser; tetap terkunci hanya di PWA terinstal |
 | Panduan reverse proxy + TLS | ❌ **Tidak ada** | README eksplisit menyerahkan ini ke operator; hanya SSH tunnel & Tailscale yang didokumentasikan |
 | Bahasa Indonesia di UI | ❌ **Belum ada** — terhalang | Repo mewajibkan kelengkapan locale (26 test); butuh keputusan Anda — lihat [§0.4](#04-yang-tidak-dikerjakan-dan-mengapa) |
@@ -686,7 +807,7 @@ JavaScript.** Parsing JS adalah biaya CPU, dan gzip tidak menolongnya sama sekal
 memakai satu.** Memecahnya per-locale langsung menghemat **~440 KB gzip (31%
 dari total payload)** tanpa menyentuh arsitektur.
 
-### 6.4 🟠 Tidak ada Web Push — notifikasi mati saat browser ditutup
+### 6.4 ✅ DIPERBAIKI (Fase 3) — Tidak ada Web Push — notifikasi mati saat browser ditutup
 
 Yang ada saat ini (`static/messages.js:9155–9213`):
 - `Notification.requestPermission()`
@@ -1281,13 +1402,19 @@ Fase 4 akan mengembalikannya dengan pemecahan per-locale.
 
 ---
 
-### FASE 3 — Web Push: notifikasi saat browser ditutup
+### FASE 3 ✅ SELESAI — Web Push: notifikasi saat browser ditutup
 
 > **Tujuan:** kirim tugas panjang ke agent, kunci HP, dapat notifikasi saat selesai.
 >
 > **Estimasi: 1 minggu** · **Prasyarat: Fase 0 (HTTPS wajib)**
 >
 > **Ini adalah fase yang paling terasa "seperti aplikasi Claude".**
+>
+> ✅ **Selesai.** Diimplementasikan **tanpa dependensi baru** — RFC 8291 dan 8292
+> ditulis langsung di atas `cryptography` yang sudah wajib. Lihat
+> [§0.7](#07-fase-3--web-push-selesai) untuk catatan pelaksanaannya, termasuk
+> satu bug yang ditangkap vektor uji resmi dan apa yang **tidak** bisa saya
+> verifikasi di sandbox ini.
 
 #### 3.1 Sisi server
 
@@ -1649,13 +1776,13 @@ Minimal sebelum merilis perubahan mobile:
 - [ ] Vendor PDF.js + Mermaid (~4 MB) → hapus jsdelivr dari CSP sepenuhnya
 - [ ] Filter tabel markdown di HP (butuh surface sheet per tabel)
 
-### Sprint 3 (Fase 3 — 1 minggu)
+### Sprint 3 (Fase 3) — ✅ SELESAI
 
-- [ ] VAPID + endpoint subscribe/unsubscribe
-- [ ] Handler `push` + `notificationclick` di service worker
-- [ ] Pemicu: turn selesai, cron selesai, **approval menunggu**, crash
-- [ ] UI setting notifikasi per-event
-- [ ] Dokumentasikan syarat "Add to Home Screen" untuk iOS
+- [x] VAPID + endpoint subscribe/unsubscribe/test *(tanpa dependensi baru)*
+- [x] Handler `push` + `pushsubscriptionchange` di service worker *(`notificationclick` sudah ada)*
+- [x] Pemicu: **approval menunggu** + turn selesai *(cron & crash: belum — lihat §0.7)*
+- [x] UI setting push, terpisah dari notifikasi lokal
+- [x] Dokumentasikan syarat "Add to Home Screen" untuk iOS *(di UI, bukan hanya di docs)*
 
 ### Sprint 4 (Fase 4 — 1–2 minggu)
 

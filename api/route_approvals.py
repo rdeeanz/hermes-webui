@@ -3,12 +3,15 @@
 State-extraction prelude to the routes.py split tracked in #1907.
 Extracts approval state, not handlers, by design.
 """
+import logging
 import queue
 import threading
 import uuid
 from contextlib import contextmanager
 
 from api.session_events import publish_session_list_changed
+
+logger = logging.getLogger(__name__)
 
 # Approval system (optional -- graceful fallback if agent not available)
 try:
@@ -923,6 +926,57 @@ def settle_gateway_pending_local_notification(
         return False, head, total
 
 
+
+def _push_approval_waiting(session_key: str, approval: dict, total: int) -> None:
+    """Web push for an approval the agent is blocked on.
+
+    This is the highest-value notification the app can send. A finished turn can
+    wait until you next look at your phone; an unanswered approval leaves the
+    agent stopped indefinitely, waiting on a tap that never comes because the
+    browser was evicted while the screen was off. The SSE notification above only
+    reaches a live page.
+
+    sw.js sets `requireInteraction` for this kind, so it stays on screen instead
+    of auto-dismissing.
+
+    Deliberately best-effort and non-blocking: submit_pending() runs on the
+    agent's tool-guard path, and a push service being slow or unreachable must
+    never delay or fail an approval.
+    """
+    try:
+        from api import push as _push
+
+        tool = ""
+        for key in ("tool", "tool_name", "name", "command"):
+            value = (approval or {}).get(key)
+            if isinstance(value, str) and value.strip():
+                tool = value.strip()
+                break
+        body = f"Waiting for your approval: {tool}" if tool else "Waiting for your approval."
+        if total > 1:
+            body += f" ({total} pending)"
+
+        profile = None
+        try:
+            from api.profiles import get_active_profile_name
+
+            profile = get_active_profile_name()
+        except Exception:
+            pass
+
+        _push.notify_async({
+            "title": "Hermes",
+            "body": body,
+            # A distinct tag from turn-complete, so an approval never collapses
+            # into (or gets collapsed by) a "response ready" notification.
+            "tag": f"hermes-approval-{session_key}",
+            "kind": "approval",
+            "url": f"/session/{session_key}",
+        }, profile)
+    except Exception:
+        logger.debug("Web push (approval waiting) failed to dispatch", exc_info=True)
+
+
 def submit_pending(session_key: str, approval: dict) -> None:
     """Append a pending approval to the per-session queue.
 
@@ -945,6 +999,7 @@ def submit_pending(session_key: str, approval: dict) -> None:
         # notify arriving before T1's earlier notify with a stale count).
         _approval_sse_notify_locked(session_key, head, total)
     publish_session_list_changed("attention_pending")
+    _push_approval_waiting(session_key, entry, total)
     # NOTE: We do NOT call _submit_pending_raw here — that function overwrites
     # _pending[session_key] with a single dict, which would undo the list we just
     # built. The gateway blocking path uses _gateway_queues (a separate mechanism

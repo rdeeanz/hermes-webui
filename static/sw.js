@@ -184,6 +184,79 @@ self.addEventListener('fetch', (event) => {
 });
 
 
+// ── Web Push ─────────────────────────────────────────────────────────────────
+//
+// The page already raises notifications itself when a stream finishes while the
+// tab is backgrounded (messages.js). That path only works while a page is alive,
+// which on a phone frequently means "not when it matters" — the browser is
+// evicted while the screen is off, and a finished turn or a waiting approval
+// goes unannounced. A push arrives regardless.
+//
+// The two paths overlap whenever a tab IS alive, so this suppresses the push if
+// a visible window is already on the target page: the user is looking at it, and
+// a system notification for something on screen is noise. A backgrounded or
+// hidden window still gets the push, because there the page's own notification
+// may never fire (throttled timers, suspended SSE).
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_e) {
+    // A push with a non-JSON body is not something this app sends, but a
+    // malformed one must still produce *something* rather than being dropped —
+    // silence is indistinguishable from a broken subscription.
+    payload = { body: (event.data && event.data.text && event.data.text()) || '' };
+  }
+
+  const title = payload.title || 'Hermes';
+  const url = payload.url || './';
+  const targetPath = (() => {
+    try { return new URL(url, self.registration.scope || './').pathname; } catch (_e) { return null; }
+  })();
+
+  const options = {
+    body: payload.body || '',
+    icon: 'static/favicon-192.png',
+    badge: 'static/favicon-32.png',
+    // Tagging by session collapses repeat notifications for the same
+    // conversation instead of stacking one per turn.
+    tag: payload.tag || 'hermes-webui',
+    renotify: payload.renotify !== false,
+    // Approvals block the agent until answered, so they are worth interrupting
+    // for; a completed turn is not.
+    requireInteraction: payload.kind === 'approval',
+    data: { url: url },
+  };
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clients) => {
+        const alreadyVisible = clients.some((client) => {
+          if (client.visibilityState !== 'visible') return false;
+          if (!targetPath) return false;
+          try { return new URL(client.url).pathname === targetPath; } catch (_e) { return false; }
+        });
+        if (alreadyVisible) return undefined;
+        return self.registration.showNotification(title, options);
+      })
+      .catch(() => self.registration.showNotification(title, options))
+  );
+});
+
+// A push service can rotate a subscription without the user doing anything. The
+// old endpoint stops working at that moment, so the page has to re-register —
+// this tells any open client to do so, and the next page load re-subscribes
+// anyway if none is listening.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      clients.forEach((client) => {
+        try { client.postMessage({ type: 'hermes:push-resubscribe' }); } catch (_e) { }
+      });
+    })
+  );
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const rawUrl = (event.notification.data && event.notification.data.url) || './';

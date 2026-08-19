@@ -1327,6 +1327,21 @@
                 <span id="notificationPermissionStatus" style="font-size:11px;color:var(--muted)"></span>
               </div>
             </div>
+            <!-- Web Push. Distinct from the setting above: that one only fires
+                 while a page is alive, which on a phone often means not at all.
+                 This one reaches a closed browser. -->
+            <div class="settings-field" id="pushSettingsField">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="settingsPushEnabled" style="width:15px;height:15px;accent-color:var(--accent)">
+                <span data-i18n="settings_label_push">Push notifications (works when the app is closed)</span>
+              </label>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px" data-i18n="settings_desc_push">Delivers a notification even when the browser is closed — when a turn finishes, or when the agent is waiting for your approval.</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+                <button type="button" class="sm-btn" id="pushTestButton" onclick="sendTestPush()" style="padding:5px 10px;font-size:12px" data-i18n="push_test_btn">Send test push</button>
+                <span id="pushStatus" style="font-size:11px;color:var(--muted)"></span>
+              </div>
+              <div id="pushIosHint" style="display:none;font-size:11px;color:var(--warning);margin-top:6px" data-i18n="push_ios_hint">On iPhone and iPad, push only works after you add Hermes to the Home Screen — Safari tabs cannot receive it.</div>
+            </div>
             <div class="settings-field">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                 <input type="checkbox" id="settingsShowTokenUsage" style="width:15px;height:15px;accent-color:var(--accent)">
