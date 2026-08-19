@@ -141,9 +141,13 @@ class TestComposerVoiceButtonI18n:
         src = _src("i18n.js")
         for key in self.REQUIRED_KEYS:
             count = len(re.findall(rf'\b{re.escape(key)}\s*:', src))
-            assert count == len(self.LOCALES), (
-                f"i18n key {key!r} appears {count} times — expected one per "
-                f"locale ({len(self.LOCALES)} locales: {self.LOCALES}). "
+            # `>=` not `==`: self.LOCALES lists the fully-translated bundles, and a
+            # partial locale may also define part of a family (see
+            # tests/locale_contract.py). The invariant is that no complete locale
+            # is missing the key, not that nothing else may define it.
+            assert count >= len(self.LOCALES), (
+                f"i18n key {key!r} appears {count} times — expected at least one per "
+                f"fully-translated locale ({len(self.LOCALES)}: {self.LOCALES}). "
                 f"Each locale block must define all four composer voice keys."
             )
 

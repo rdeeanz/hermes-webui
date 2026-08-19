@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from tests.test_selected_context_user_render_runtime import _run_user_renderer
+from tests.locale_contract import complete_blocks
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,7 +34,8 @@ def _locale_blocks(src: str) -> dict[str, str]:
         start = match.end()
         end = matches[idx + 1].start() if idx + 1 < len(matches) else src.rfind("\n};")
         blocks[match.group(2) or match.group(3)] = src[start:end]
-    return blocks
+    # Partial locales fall back to English per key — see tests/locale_contract.py.
+    return complete_blocks(blocks)
 
 
 def _instruction_values(src: str) -> list[str]:

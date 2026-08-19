@@ -7,6 +7,8 @@ import re
 import time
 import urllib.error
 
+from tests.locale_contract import expected_locale_count
+
 import api.gateway_chat as gateway_chat
 import api.models as models
 import api.streaming as streaming
@@ -250,7 +252,8 @@ def test_gateway_auth_label_i18n_key_exists_for_every_locale():
             re.MULTILINE,
         )
     ]
-    assert src.count("gateway_auth_label") >= len(locale_names)
+    # Partial locales fall back to English per key — see tests/locale_contract.py.
+    assert src.count("gateway_auth_label") >= expected_locale_count(len(locale_names))
 
 
 def test_gateway_chat_health_payload_is_documented_as_operator_diagnostic_only():

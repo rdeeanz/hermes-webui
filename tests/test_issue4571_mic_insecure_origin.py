@@ -7,6 +7,7 @@ browser permission was denied.
 """
 from pathlib import Path
 import re
+from tests.locale_contract import expected_locale_count
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,7 +26,8 @@ def _slice_between(src: str, start_marker: str, end_marker: str) -> str:
 
 
 def test_i18n_key_exists_in_every_locale_and_names_https_localhost():
-    assert I18N_JS.count("mic_insecure_origin") == _locale_count()
+    # `>=`: partial locales (tests/locale_contract.py) may define this key too.
+    assert I18N_JS.count("mic_insecure_origin") >= expected_locale_count(_locale_count())
 
     english = re.search(r"mic_insecure_origin: '([^']+)'", I18N_JS)
     assert english, "English mic_insecure_origin string must exist"

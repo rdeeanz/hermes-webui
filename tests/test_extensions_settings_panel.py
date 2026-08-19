@@ -5,6 +5,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.locale_contract import complete_blocks, expected_locale_count
 
 
 ROOT = Path(__file__).parent.parent
@@ -31,7 +32,10 @@ def _between(start_marker: str, end_marker: str) -> str:
 
 
 def _locale_count() -> int:
-    return len(re.findall(r"^  (?:[A-Za-z_][A-Za-z0-9_]*|'[^']+'):\s*\{", I18N_JS, re.MULTILINE))
+    """Number of locales held to full key parity (partial ones excluded)."""
+    return expected_locale_count(
+        len(re.findall(r"^  (?:[A-Za-z_][A-Za-z0-9_]*|'[^']+'):\s*\{", I18N_JS, re.MULTILINE))
+    )
 
 
 def _locale_blocks() -> dict[str, str]:
@@ -40,7 +44,8 @@ def _locale_blocks() -> dict[str, str]:
     for idx, match in enumerate(matches):
         end = matches[idx + 1].start() if idx + 1 < len(matches) else len(I18N_JS)
         blocks[match.group(1)] = I18N_JS[match.start():end]
-    return blocks
+    # Partial locales fall back to English per key — see tests/locale_contract.py.
+    return complete_blocks(blocks)
 
 
 def _locale_string(block: str, key: str) -> str:

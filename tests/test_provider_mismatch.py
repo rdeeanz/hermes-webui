@@ -18,6 +18,7 @@ from tests.conftest import TEST_STATE_DIR
 
 REPO_ROOT = pathlib.Path(__file__).parent.parent.resolve()
 from tests._pytest_port import BASE
+from tests.locale_contract import expected_locale_count
 
 
 def _read(rel_path: str) -> str:
@@ -229,17 +230,19 @@ class TestI18nProviderMismatch:
     def test_all_locales_have_warning_key(self):
         """provider_mismatch_warning must appear in all locales."""
         src = _read("static/i18n.js")
-        locale_count = len(self._locale_names(src))
+        # Partial locales fall back to English per key, so they do not carry
+        # this string — see tests/locale_contract.py.
+        locale_count = expected_locale_count(len(self._locale_names(src)))
         count = self._count_key(src, "provider_mismatch_warning")
         assert count >= locale_count, (
             f"provider_mismatch_warning found {count} times, expected >= {locale_count} "
-            f"(one per locale)"
+            f"(one per fully-translated locale)"
         )
 
     def test_all_locales_have_label_key(self):
         """provider_mismatch_label must appear in all locales."""
         src = _read("static/i18n.js")
-        locale_count = len(self._locale_names(src))
+        locale_count = expected_locale_count(len(self._locale_names(src)))
         count = self._count_key(src, "provider_mismatch_label")
         assert count >= locale_count, (
             f"provider_mismatch_label found {count} times, expected >= {locale_count}"

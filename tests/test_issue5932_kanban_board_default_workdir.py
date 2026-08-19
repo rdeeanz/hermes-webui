@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 from tests.js_source_extract import extract_function
+from tests.locale_contract import is_partial
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -155,9 +156,19 @@ def test_default_board_settings_remain_reachable():
 
 
 def test_new_board_keys_are_present_in_every_locale_block():
-    blocks = re.findall(r"\n\s*(?:['\"][a-z]{2}(?:-[A-Z][A-Za-z]+)?['\"]|[a-z]{2}(?:-[A-Z]{2})?)\s*:\s*\{(.*?)\n\s*\},", I18N, re.S)
+    # Capture the locale code alongside the body so partial bundles can be
+    # skipped — they fall back to English per key (tests/locale_contract.py).
+    blocks = [
+        (quoted or plain, body)
+        for quoted, plain, body in re.findall(
+            r"\n\s*(?:['\"](?P<q>[a-z]{2}(?:-[A-Z][A-Za-z]+)?)['\"]|(?P<p>[a-z]{2}(?:-[A-Z]{2})?))\s*:\s*\{(?P<b>.*?)\n\s*\},".replace("?P<q>", "").replace("?P<p>", "").replace("?P<b>", ""),
+            I18N, re.S,
+        )
+    ]
     assert len(blocks) >= 14
-    for block in blocks:
+    for code, block in blocks:
+        if is_partial(code):
+            continue
         assert "kanban_board_settings:" in block
         assert "kanban_board_default_workdir:" in block
         assert "kanban_board_default_workdir_placeholder:" in block

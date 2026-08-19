@@ -10163,6 +10163,15 @@ _LOGIN_LOCALE = {
         "invalid_pw": "Invalid password",
         "conn_failed": "Connection failed",
     },
+    "id": {
+        "lang": "id-ID",
+        "title": "Masuk",
+        "subtitle": "Masukkan kata sandi Anda untuk melanjutkan",
+        "placeholder": "Kata sandi",
+        "btn": "Masuk",
+        "invalid_pw": "Kata sandi salah",
+        "conn_failed": "Koneksi gagal",
+    },
     "fr": {
         "lang": "fr-FR",
         "title": "Se connecter",

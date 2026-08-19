@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from tests.locale_contract import is_partial
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -222,6 +223,9 @@ def test_process_wakeup_label_key_exists_in_all_locales():
     assert locale_matches, "expected at least the English locale"
     for idx, match in enumerate(locale_matches):
         name = match.group("quoted") or match.group("plain")
+        # Partial locales fall back to English per key — see tests/locale_contract.py.
+        if is_partial(name):
+            continue
         start = match.end()
         end = locale_matches[idx + 1].start() if idx + 1 < len(locale_matches) else I18N_JS.find("\n};", start)
         block = I18N_JS[start:end]

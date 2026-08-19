@@ -7,6 +7,7 @@ and that browser-native confirm/prompt calls are no longer used in the Web UI.
 
 import pathlib
 import re
+from tests.locale_contract import complete_blocks
 
 
 REPO = pathlib.Path(__file__).parent.parent
@@ -128,6 +129,13 @@ AUTH_SAFETY_LOCALE_KEYS = (
 
 
 def _i18n_locale_blocks(src):
+    """Locale blocks held to full key parity.
+
+    Partial locales are filtered out here rather than at each call site: they
+    fall back to English per key at runtime, so requiring them to carry every
+    auth-safety string would block a language from landing incrementally. See
+    tests/locale_contract.py.
+    """
     heads = list(re.finditer(r"^  (?:(?:'([^']+)')|([A-Za-z][A-Za-z0-9_]*)):\s*\{", src, re.M))
     blocks = {}
     for i, head in enumerate(heads):
@@ -135,7 +143,7 @@ def _i18n_locale_blocks(src):
         end = heads[i + 1].start() if i + 1 < len(heads) else src.find("\n};", head.end())
         assert end != -1, f"could not find end of locale block {locale}"
         blocks[locale] = src[head.end():end]
-    return blocks
+    return complete_blocks(blocks)
 
 
 def test_auth_safety_keys_exist_once_per_locale():

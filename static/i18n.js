@@ -336,6 +336,12 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'When on, selecting a different workspace starts a fresh conversation bound to that workspace and leaves your current chat on its original workspace, avoiding stale cross-workspace context. When off (default), switching workspace changes the current workspace in place.',
     workspace_switched_new_chat: 'Started a new chat in {0}',
     settings_desc_busy_placeholder_hint: 'Shows the composer placeholder with the current busy action while the session is running and the draft is empty.',
+    // The composer's resting placeholder. {0} is the configurable bot name, so
+    // this is applied by boot.js rather than a data-i18n-placeholder attribute —
+    // the attribute path would write the raw template into the field. It used to
+    // be built as a bare 'Message ' + name + '…' concatenation, which made the
+    // most prominent string on the first screen untranslatable in every locale.
+    composer_placeholder: 'Message {0}…',
     composer_placeholder_busy_queue: 'Enter = queue | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = interrupt | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = steer | /queue | /background | /interrupt',
@@ -2113,6 +2119,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'When on, selecting a different workspace starts a fresh conversation bound to that workspace and leaves your current chat on its original workspace, avoiding stale cross-workspace context. When off (default), switching workspace changes the current workspace in place.',
     workspace_switched_new_chat: 'Started a new chat in {0}',
     settings_desc_busy_placeholder_hint: 'Shows the composer placeholder with the current busy action while the session is running and the draft is empty.',
+    composer_placeholder: 'Messaggio per {0}…',
     composer_placeholder_busy_queue: 'Enter = queue | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = interrupt | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = steer | /queue | /background | /interrupt',
@@ -3872,6 +3879,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: '有効にすると、別のワークスペースを選択したときにそのワークスペースに紐づく新しい会話を開始し、現在のチャットは元のワークスペースに残ります。ワークスペースをまたいだ古いコンテキストが混入するのを防げます。無効の場合（既定）、ワークスペースを切り替えると現在のワークスペースがその場で変更されます。',
     workspace_switched_new_chat: '{0} で新しいチャットを開始しました',
     settings_desc_busy_placeholder_hint: 'セッションが実行中で入力欄が空のときに、現在の実行中タスクをプレースホルダーとして表示します。',
+    composer_placeholder: '{0} へのメッセージ…',
     composer_placeholder_busy_queue: 'Enter = キュー登録 | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = 割り込み | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = 割り込み操作 | /queue | /background | /interrupt',
@@ -5578,6 +5586,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'Когда включено, выбор другого рабочего пространства начинает новую беседу, привязанную к нему, и оставляет текущий чат в исходном рабочем пространстве, чтобы избежать устаревшего межпространственного контекста. Когда выключено (по умолчанию), смена рабочего пространства меняет его в текущем чате.',
     workspace_switched_new_chat: 'Начат новый чат в {0}',
     settings_desc_busy_placeholder_hint: 'Когда сеанс занят, а черновик пуст, поле ввода показывает подсказку с текущим действием.',
+    composer_placeholder: 'Сообщение для {0}…',
     composer_placeholder_busy_queue: 'Enter = очередь | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = прервать | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = правка | /queue | /background | /interrupt',
@@ -7363,6 +7372,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'When on, selecting a different workspace starts a fresh conversation bound to that workspace and leaves your current chat on its original workspace, avoiding stale cross-workspace context. When off (default), switching workspace changes the current workspace in place.',
     workspace_switched_new_chat: 'Started a new chat in {0}',
     settings_desc_busy_placeholder_hint: 'Shows the composer placeholder with the current busy action while the session is running and the draft is empty.',
+    composer_placeholder: 'Mensaje para {0}…',
     composer_placeholder_busy_queue: 'Enter = queue | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = interrupt | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = steer | /queue | /background | /interrupt',
@@ -9037,6 +9047,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'When on, selecting a different workspace starts a fresh conversation bound to that workspace and leaves your current chat on its original workspace, avoiding stale cross-workspace context. When off (default), switching workspace changes the current workspace in place.',
     workspace_switched_new_chat: 'Started a new chat in {0}',
     settings_desc_busy_placeholder_hint: 'Shows the composer placeholder with the current busy action while the session is running and the draft is empty.',
+    composer_placeholder: 'Nachricht an {0}…',
     composer_placeholder_busy_queue: 'Enter = queue | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = interrupt | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = steer | /queue | /background | /interrupt',
@@ -10766,6 +10777,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: '开启此功能后，选择不同的工作区会开启一个与该工作区绑定的全新对话，你当前的聊天则保留在原工作区，避免出现过时的跨工作区上下文。关闭此功能（默认状态）后，切换工作区会直接更改当前工作区。 ',
     workspace_switched_new_chat: '在{0}中开始了新的聊天',
     settings_desc_busy_placeholder_hint: '在会话运行且草稿为空时，显示带有当前忙碌操作的编辑器占位符。',
+    composer_placeholder: '给 {0} 发消息…',
     composer_placeholder_busy_queue: 'Enter = 队列 | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = 中断 | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = 引导 | /queue | /background | /interrupt',
@@ -12471,6 +12483,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'When on, selecting a different workspace starts a fresh conversation bound to that workspace and leaves your current chat on its original workspace, avoiding stale cross-workspace context. When off (default), switching workspace changes the current workspace in place.',
     workspace_switched_new_chat: 'Started a new chat in {0}',
     settings_desc_busy_placeholder_hint: 'Shows the composer placeholder with the current busy action while the session is running and the draft is empty.',
+    composer_placeholder: '傳訊息給 {0}…',
     composer_placeholder_busy_queue: 'Enter = queue | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = interrupt | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = steer | /queue | /background | /interrupt',
@@ -14157,6 +14170,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'When on, selecting a different workspace starts a fresh conversation bound to that workspace and leaves your current chat on its original workspace, avoiding stale cross-workspace context. When off (default), switching workspace changes the current workspace in place.',
     workspace_switched_new_chat: 'Started a new chat in {0}',
     settings_desc_busy_placeholder_hint: 'Shows the composer placeholder with the current busy action while the session is running and the draft is empty.',
+    composer_placeholder: 'Mensagem para {0}…',
     composer_placeholder_busy_queue: 'Enter = queue | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = interrupt | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = steer | /queue | /background | /interrupt',
@@ -15798,6 +15812,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'When on, selecting a different workspace starts a fresh conversation bound to that workspace and leaves your current chat on its original workspace, avoiding stale cross-workspace context. When off (default), switching workspace changes the current workspace in place.',
     workspace_switched_new_chat: 'Started a new chat in {0}',
     settings_desc_busy_placeholder_hint: 'Shows the composer placeholder with the current busy action while the session is running and the draft is empty.',
+    composer_placeholder: '{0}에게 메시지…',
     composer_placeholder_busy_queue: 'Enter = queue | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = interrupt | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = steer | /queue | /background | /interrupt',
@@ -17551,6 +17566,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'When on, selecting a different workspace starts a fresh conversation bound to that workspace and leaves your current chat on its original workspace, avoiding stale cross-workspace context. When off (default), switching workspace changes the current workspace in place.',
     workspace_switched_new_chat: 'Started a new chat in {0}',
     settings_desc_busy_placeholder_hint: 'Shows the composer placeholder with the current busy action while the session is running and the draft is empty.',
+    composer_placeholder: 'Message pour {0}…',
     composer_placeholder_busy_queue: 'Enter = queue | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = interrupt | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = steer | /queue | /background | /interrupt',
@@ -20248,6 +20264,7 @@ const LOCALES = {
     show_earlier_steps: 'Show {0} earlier steps',
     command_label: 'Příkaz',
     composer_placeholder_busy_interrupt: 'Enter = přerušení | /queue | /background | /steer',
+    composer_placeholder: 'Zpráva pro {0}…',
     composer_placeholder_busy_queue: 'Enter = fronta | /interrupt | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = řízení | /queue | /background | /interrupt',
     compress_complete_label: 'Komprese dokončena',
@@ -21018,6 +21035,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'When on, selecting a different workspace starts a fresh conversation bound to that workspace and leaves your current chat on its original workspace, avoiding stale cross-workspace context. When off (default), switching workspace changes the current workspace in place.',
     workspace_switched_new_chat: 'Started a new chat in {0}',
     settings_desc_busy_placeholder_hint: 'Shows the composer placeholder with the current busy action while the session is running and the draft is empty.',
+    composer_placeholder: '{0} için mesaj…',
     composer_placeholder_busy_queue: 'Enter = queue | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = interrupt | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = steer | /queue | /background | /interrupt',
@@ -22763,6 +22781,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'When on, selecting a different workspace starts a fresh conversation bound to that workspace and leaves your current chat on its original workspace, avoiding stale cross-workspace context. When off (default), switching workspace changes the current workspace in place.',
     workspace_switched_new_chat: 'Started a new chat in {0}',
     settings_desc_busy_placeholder_hint: 'Shows the composer placeholder with the current busy action while the session is running and the draft is empty.',
+    composer_placeholder: 'Wiadomość do {0}…',
     composer_placeholder_busy_queue: 'Enter = queue | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = interrupt | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = steer | /queue | /background | /interrupt',
@@ -24186,6 +24205,194 @@ const LOCALES = {
     checkpoint_diff_no_changes: 'Nie znaleziono różnic między tym punktem kontrolnym a obecnym obszarem roboczym.',
     checkpoint_diff_files_changed: (n) => n === 1 ? '1 plik zmieniony' : `${n} zmienionych plików`,
   },
+  // ── Bahasa Indonesia ────────────────────────────────────────────────────────
+  // DELIBERATELY PARTIAL. t() resolves `_locale[key] ?? LOCALES.en[key]`, so any
+  // key absent here falls back to English per-key rather than dropping the whole
+  // locale. Declared as partial in tests/locale_contract.py, which is what keeps
+  // the per-key-family parity tests honest for the complete locales while letting
+  // this one grow incrementally.
+  //
+  // What is translated is the chrome a user actually reads while working: the
+  // composer, navigation tabs, session actions, voice, model picker, login,
+  // connection states, and the mobile surfaces. The long tail — cron, onboarding,
+  // extensions, and the ~200 settings strings — is intentionally left in English
+  // rather than machine-translated, because a wrong Indonesian label in a
+  // destructive settings flow is worse than an English one a user can look up.
+  // Move keys up into this bundle as a speaker reviews them; nothing breaks in
+  // the meantime.
+  id: {
+    _lang: 'id',
+    _label: 'Bahasa Indonesia',
+    _speech: 'id-ID',
+
+    // Connection
+    offline_title: 'Koneksi terputus',
+    offline_browser_detail: 'Browser Anda melaporkan perangkat ini sedang offline.',
+    offline_network_detail: 'Hermes tidak dapat dijangkau dari browser ini saat ini.',
+    offline_autorefresh: 'Halaman ini akan dimuat ulang otomatis begitu Hermes bisa dijangkau lagi.',
+    offline_check_now: 'Periksa sekarang',
+    offline_checking: 'Memeriksa…',
+    offline_stream_waiting: 'Koneksi terputus. Menunggu untuk menyegarkan…',
+
+    // Common actions
+    save: 'Simpan',
+    cancel: 'Batal',
+    copy: 'Salin',
+    edit: 'Ubah',
+    search: 'Cari',
+    delete_title: 'Hapus',
+    delete_failed: 'Gagal menghapus: ',
+    cancelling: 'Membatalkan…',
+    cancel_failed: 'Gagal membatalkan.',
+
+    // Navigation
+    tab_chat: 'Obrolan',
+    tab_dashboard: 'Dasbor Hermes',
+    tab_insights: 'Wawasan',
+    tab_kanban: 'Kanban',
+    tab_logs: 'Log',
+    tab_memory: 'Memori',
+    tab_profiles: 'Profil',
+    tab_settings: 'Pengaturan',
+    tab_skills: 'Skill',
+    tab_tasks: 'Tugas',
+    tab_todos: 'Daftar tugas',
+    tab_workspaces: 'Ruang kerja',
+
+    // Empty state — the first screen a user meets, so it is translated whole
+    // rather than leaving the heading Indonesian and the body English.
+    empty_title: 'Ada yang bisa saya bantu?',
+    empty_subtitle: 'Tanyakan apa saja, jalankan perintah, jelajahi berkas, atau kelola tugas terjadwal Anda.',
+    suggest_files: 'Berkas apa saja yang ada di ruang kerja ini?',
+    suggest_schedule: 'Apa jadwal saya hari ini?',
+    suggest_plan: 'Bantu saya merencanakan proyek kecil.',
+    empty_dir: '(kosong)',
+    filter_conversations: 'Saring percakapan...',
+    loading: 'Memuat...',
+    done: 'Selesai',
+    copied: 'Tersalin!',
+
+    // Composer
+    composer_placeholder: 'Pesan untuk {0}…',
+    composer_send: 'Kirim pesan',
+    composer_stop: 'Hentikan generasi',
+    composer_queue: 'Antrikan pesan',
+    composer_steer: 'Arahkan respons saat ini',
+    composer_interrupt: 'Interupsi dan kirim',
+    composer_disabled_empty: 'Ketik pesan untuk mengirim',
+    composer_disabled_clarify: 'Jawab dulu permintaan klarifikasi',
+    composer_disabled_compression: 'Menunggu kompresi selesai',
+    composer_control_attach: 'Lampirkan',
+    composer_control_mic: 'Mikrofon',
+    composer_control_model: 'Model',
+    composer_control_profile: 'Profil',
+    composer_control_workspace: 'Ruang kerja',
+    composer_control_context: 'Konteks',
+    composer_control_reasoning: 'Penalaran',
+    composer_control_toolsets: 'Perangkat alat',
+    composer_control_saved_prompts: 'Prompt tersimpan',
+    composer_control_status: 'Status',
+    composer_control_voice_mode: 'Mode suara',
+    composer_control_mobile_config: 'Pengaturan ringkas',
+    composer_control_quota_chip: 'Chip kuota',
+    composer_control_bg_badge: 'Lencana latar',
+    composer_mobile_workspace: 'Ruang kerja',
+    composer_mobile_model: 'Model',
+    composer_mobile_quota: 'Kuota',
+    composer_mobile_reasoning: 'Penalaran',
+    composer_mobile_context: 'Konteks',
+
+    // Saved prompts + outline — the two surfaces re-homed as mobile sheets
+    saved_prompts_save_current: 'Simpan teks saat ini sebagai prompt',
+    saved_prompts_saved: 'Prompt disimpan',
+    saved_prompts_empty: 'Belum ada prompt tersimpan.',
+    saved_prompts_empty_input: 'Ketik dulu prompt yang ingin disimpan',
+    saved_prompts_delete: 'Hapus prompt',
+    outline_title: 'Kerangka',
+    outline_loading: 'Memuat…',
+    outline_empty: 'Belum ada pertanyaan.',
+
+    // Sessions
+    session_imported: 'Sesi diimpor',
+    session_rename: 'Ganti nama percakapan',
+    session_rename_desc: 'Ubah judul percakapan ini',
+    session_pin: 'Sematkan percakapan',
+    session_pin_desc: 'Jaga percakapan ini tetap di atas',
+    session_pin_failed: 'Gagal menyematkan: ',
+    session_copy_link: 'Salin tautan percakapan',
+    session_copy_link_desc: 'Salin tautan langsung ke percakapan ini',
+    session_link_copied: 'Tautan percakapan disalin ke papan klip',
+    session_link_copy_failed: 'Gagal menyalin tautan percakapan: ',
+    session_jump_start: 'Awal',
+    session_jump_start_label: 'Lompat ke awal sesi',
+    session_jump_end: 'Akhir',
+    session_jump_end_label: 'Lompat ke akhir sesi',
+    session_new_message: 'Pesan baru',
+    session_new_message_label: 'Ada pesan baru, lompat ke akhir',
+    session_attention_approval_title: 'Menunggu keputusan izin',
+    session_attention_clarify_title: 'Menunggu jawaban Anda',
+    session_attention_generic_title: 'Menunggu tindakan pengguna',
+
+    // Voice
+    voice_dictate: 'Dikte',
+    voice_dictate_active: 'Hentikan dikte',
+    voice_recording_active: 'Hentikan perekaman',
+    voice_mode_toggle: 'Mode suara',
+    voice_mode_toggle_active: 'Keluar dari mode suara',
+    voice_mode_active: 'Mode suara aktif',
+    voice_mode_off: 'Mode suara nonaktif',
+    voice_listening: 'Mendengarkan…',
+    voice_speaking: 'Berbicara…',
+    voice_thinking: 'Berpikir…',
+    voice_error: 'Suara tidak didukung di browser ini',
+    voice_send_raw: 'Kirim audio mentah',
+    voice_raw_attached: 'Audio dilampirkan. Tekan Kirim atau ketik lagi.',
+    dictation_append_label: 'Tambahkan hasil dikte ke kolom pesan',
+    mic_no_speech: 'Tidak ada suara terdeteksi. Coba lagi.',
+    mic_network: 'Pengenalan suara tidak tersedia.',
+    mic_error: 'Kesalahan input suara: ',
+
+    // Model picker
+    model_search_placeholder: 'Cari model…',
+    model_search_no_results: 'Model tidak ditemukan',
+    model_not_found_label: 'Model tidak ditemukan',
+    model_badge_selected: 'Dipilih',
+    model_group_configured: 'Terkonfigurasi',
+    model_custom_label: 'ID model kustom',
+    model_custom_placeholder: 'mis. openai/gpt-5.4',
+    model_show_all_models: 'Tampilkan semua {0} model',
+    model_unavailable: ' (tidak tersedia)',
+
+    // Login
+    login_title: 'Masuk',
+    login_subtitle: 'Masukkan kata sandi Anda untuk melanjutkan',
+    login_placeholder: 'Kata sandi',
+    login_btn: 'Masuk',
+    login_invalid_pw: 'Kata sandi salah',
+    login_conn_failed: 'Koneksi gagal',
+
+    // Skills + memory
+    skills_edit: 'Ubah',
+    skills_delete: 'Hapus',
+    skills_no_match: 'Tidak ada skill yang cocok.',
+    skills_empty_title: 'Pilih sebuah skill',
+    skills_back_to: 'Kembali ke {0}',
+    memory_saved: 'Memori disimpan',
+    memory_notes_label: 'memori (catatan)',
+
+    // Updates
+    update_now: 'Perbarui Sekarang',
+    update_later: 'Nanti',
+    update_updating: 'Memperbarui…',
+    update_force: 'Paksa pembaruan',
+    update_failed_prefix: 'Pembaruan gagal: ',
+    update_hard_refresh_now: 'Muat ulang paksa sekarang',
+    update_clear_lock_retry: 'Bersihkan kunci dan coba perbarui lagi',
+
+    // Theme
+    theme_set: 'Tema: ',
+  },
+
   vi: {
     offline_title: 'Mất kết nối',
     offline_browser_detail: 'Trình duyệt báo rằng thiết bị này đang ngoại tuyến.',
@@ -24493,6 +24700,7 @@ const LOCALES = {
     settings_desc_new_chat_on_workspace_switch: 'When on, selecting a different workspace starts a fresh conversation bound to that workspace and leaves your current chat on its original workspace, avoiding stale cross-workspace context. When off (default), switching workspace changes the current workspace in place.',
     workspace_switched_new_chat: 'Started a new chat in {0}',
     settings_desc_busy_placeholder_hint: 'Shows the composer placeholder with the current busy action while the session is running and the draft is empty.',
+    composer_placeholder: 'Nhắn tin cho {0}…',
     composer_placeholder_busy_queue: 'Enter = queue | /interrupt | /background | /steer',
     composer_placeholder_busy_interrupt: 'Enter = interrupt | /queue | /background | /steer',
     composer_placeholder_busy_steer: 'Enter = steer | /queue | /background | /interrupt',
@@ -26384,6 +26592,12 @@ function applyLocaleToDOM() {
   });
   if (typeof syncWorkspacePanelUI === 'function') syncWorkspacePanelUI();
   if (typeof syncAppTitlebar === 'function') syncAppTitlebar();
+  // The composer placeholder interpolates the configurable bot name, so it is
+  // owned by applyBotName() rather than a data-i18n-placeholder attribute. It
+  // therefore has to be re-applied here too, or switching language leaves the
+  // most prominent string on the first screen in the previous language until
+  // something else happens to touch the bot name.
+  if (typeof applyBotName === 'function') applyBotName();
 }
 
 // Apply saved locale immediately so there's no flash of English on reload.
