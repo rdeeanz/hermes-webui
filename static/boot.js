@@ -2816,12 +2816,20 @@ function _setResolvedTheme(isDark){
   document.documentElement.classList.toggle('dark',effectiveDark);
   const link=document.getElementById('prism-theme');
   if(!link){ _syncThemeColorMeta(); return; }
-  const want=effectiveDark
-    ?'https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css'
-    :'https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css';
-  // No SRI integrity on theme CSS — jsdelivr edge nodes serve different
-  // digests for the same pinned version, causing intermittent blocking (#1100).
-  if(link.href!==want){ link.integrity=''; link.href=want; }
+  // Prism themes are vendored (static/vendor/prismjs) rather than fetched from a
+  // CDN, so an air-gapped deploy keeps syntax highlighting. Carry the existing
+  // ?v= cache-buster across the swap: without it the swapped-in stylesheet drops
+  // from immutable far-future caching to max-age=300 on every theme toggle.
+  const _prismBase='static/vendor/prismjs/1.29.0/themes/';
+  const _prismVersionQuery=(link.getAttribute('href')||'').split('?')[1];
+  const _suffix=_prismVersionQuery?('?'+_prismVersionQuery):'';
+  const want=_prismBase+(effectiveDark?'prism-tomorrow.min.css':'prism.min.css')+_suffix;
+  // link.href reflects the RESOLVED absolute URL, so compare against the resolved
+  // form of `want` — comparing a relative string would never match and would
+  // re-assign (and re-fetch) the stylesheet on every theme sync.
+  let _wantAbs=want;
+  try{ _wantAbs=new URL(want,document.baseURI).href; }catch(_){ }
+  if(link.href!==_wantAbs){ link.integrity=''; link.href=want; }
   _syncThemeColorMeta();
 }
 

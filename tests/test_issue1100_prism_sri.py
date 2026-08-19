@@ -1,74 +1,77 @@
-"""Tests for #1100 — Prism.js SRI integrity check no longer blocks theme CSS."""
+"""Tests for #1100 — Prism theme CSS must never be blocked by an integrity check.
+
+The original bug: jsdelivr edge nodes served byte-different responses for the
+same pinned version, so the SRI hash on prism-tomorrow.min.css failed
+intermittently and syntax highlighting silently disappeared.
+
+Prism is vendored under static/vendor/prismjs now, which removes the root cause
+outright — a same-origin asset served by our own _serve_static cannot be swapped
+by a third party, and SRI/crossorigin are meaningless for it. What these tests
+still guard is the invariant that mattered: nothing may reintroduce an integrity
+attribute (or a CDN URL) on the Prism assets, whether in the markup or in the
+runtime theme swap.
+"""
 import re
 
 
-def test_prism_theme_link_has_no_integrity():
-    """The prism-tomorrow.min.css link must not have an integrity attribute."""
+def _html():
     with open("static/index.html") as f:
-        src = f.read()
-    # Find the prism-theme link tag
-    m = re.search(
-        r'<link[^>]*id="prism-theme"[^>]*>',
-        src
-    )
+        return f.read()
+
+
+def _prism_theme_tag(src):
+    m = re.search(r'<link[^>]*id="prism-theme"[^>]*>', src)
     assert m, "prism-theme link must exist"
-    link_tag = m.group(0)
-    assert "integrity=" not in link_tag, \
+    return m.group(0)
+
+
+def test_prism_theme_link_has_no_integrity():
+    """The prism theme link must not carry an integrity attribute."""
+    assert "integrity=" not in _prism_theme_tag(_html()), \
         "prism-theme link must not have integrity attribute (causes intermittent failures)"
 
 
-def test_prism_theme_link_has_crossorigin():
-    """The prism-theme link should still have crossorigin for CORS."""
-    with open("static/index.html") as f:
-        src = f.read()
-    m = re.search(
-        r'<link[^>]*id="prism-theme"[^>]*>',
-        src
-    )
-    assert m, "prism-theme link must exist"
-    link_tag = m.group(0)
-    assert "crossorigin" in link_tag, \
-        "prism-theme link should still have crossorigin attribute"
+def test_prism_theme_link_is_same_origin():
+    """Vendored, so no crossorigin negotiation is involved at all."""
+    tag = _prism_theme_tag(_html())
+    assert "cdn." not in tag and "//" not in tag.split('href="')[1].split('"')[0], \
+        f"prism-theme must load from static/vendor, got: {tag}"
+    assert "crossorigin" not in tag, \
+        "crossorigin is meaningless for a same-origin vendored stylesheet"
 
 
 def test_prism_theme_version_pinned():
-    """The prism CSS URL must pin the version to prevent breaking changes."""
-    with open("static/index.html") as f:
-        src = f.read()
-    m = re.search(
-        r'<link[^>]*id="prism-theme"[^>]*href="([^"]*)"[^>]*>',
-        src
-    )
+    """The version must stay pinned — it is encoded in the vendored path."""
+    m = re.search(r'<link[^>]*id="prism-theme"[^>]*href="([^"]*)"[^>]*>', _html())
     assert m, "prism-theme link must have href"
     href = m.group(1)
-    assert "@1.29.0" in href, \
-        f"Prism CSS version must be pinned, found href: {href}"
+    assert "/1.29.0/" in href, \
+        f"Prism CSS version must be pinned in the vendored path, found href: {href}"
 
 
-def test_prism_js_still_has_integrity():
-    """Prism JS files should keep SRI — they are less affected by CDN edge issues."""
-    with open("static/index.html") as f:
-        src = f.read()
-    # prism-core.min.js
-    assert re.search(r'prism-core\.min\.js[^>]*integrity=', src), \
-        "prism-core.min.js should still have integrity attribute"
-    # prism-autoloader.min.js
-    assert re.search(r'prism-autoloader\.min\.js[^>]*integrity=', src), \
-        "prism-autoloader.min.js should still have integrity attribute"
+def test_prism_js_has_no_integrity():
+    """SRI on a same-origin script adds a failure mode and buys nothing.
+
+    The page and the script are served by the same process from the same
+    directory; an attacker able to alter static/vendor can alter index.html too.
+    """
+    src = _html()
+    for asset in ("prism-core.min.js", "prism-autoloader.min.js"):
+        m = re.search(rf'<script[^>]*{re.escape(asset)}[^>]*>', src)
+        assert m, f"{asset} must be loaded by index.html"
+        assert "integrity=" not in m.group(0), \
+            f"{asset} is vendored same-origin; integrity= only adds a failure mode"
+        assert "cdn." not in m.group(0), f"{asset} must not load from a CDN"
 
 
 def test_boot_js_set_resolved_theme_no_integrity():
     """_setResolvedTheme in boot.js must not re-apply integrity on theme switch."""
     with open("static/boot.js") as f:
         src = f.read()
-    # _setResolvedTheme function must exist
     assert "_setResolvedTheme" in src, "_setResolvedTheme function must exist"
-    # Must NOT assign link.integrity with a hash value
     assert not re.search(r'link\.integrity\s*=\s*["\']sha', src), \
         "_setResolvedTheme must not set link.integrity to an SRI hash"
-    # Must NOT have a wantIntegrity variable
     assert "wantIntegrity" not in src, \
         "wantIntegrity variable should be removed from _setResolvedTheme"
-    # Should clear integrity (set to empty) when switching theme
     assert re.search(r"link\.integrity\s*=\s*['\"]", src), \
         "_setResolvedTheme should clear link.integrity on theme switch"

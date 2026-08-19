@@ -202,7 +202,7 @@ function _ensureXterm(){
   if(!surface)return null;
   if(TERMINAL_UI.term)return TERMINAL_UI.term;
   if(!_xtermReady()){
-    surface.textContent='Terminal library failed to load. Check network access to cdn.jsdelivr.net.';
+    surface.textContent='Terminal library failed to load. Reload the page; if it persists, check that static/vendor/xterm/ is present in the deployment.';
     return null;
   }
   const theme=_terminalTheme();

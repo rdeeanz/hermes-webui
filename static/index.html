@@ -70,7 +70,8 @@
   }
 })()</script>
 <link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
+  <!-- xterm.js CSS — vendored from npm:xterm@5.3.0 (see static/vendor/xterm/5.3.0). -->
+  <link rel="stylesheet" href="static/vendor/xterm/5.3.0/xterm.css?v=__WEBUI_VERSION__">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
   <!-- streaming-markdown: incremental DOM-building markdown parser for live streams -->
@@ -84,16 +85,32 @@
     // sha384 of smd.min.js @0.2.15: sha384-T6r95ocN9t3W8tUK2Fa6FPaO7bJryyjyW0WCalrUnpgtm2qXr5xcN4vwPYEJ6vHa
     window.smd = smd;
   </script>
-  <!-- Prism.js syntax highlighting (loaded async, non-blocking) -->
-  <!-- SRI removed from prism-tomorrow.min.css — jsdelivr serves different digests across
-       edge nodes causing intermittent integrity failures that block syntax highlighting (#1100).
-       Version is pinned to @1.29.0 which is sufficient for supply-chain assurance. -->
-  <link id="prism-theme" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" crossorigin="anonymous">
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" integrity="sha384-MXybTpajaBV0AkcBaCPT4KIvo0FzoCiWXgcihYsw4FUkEz0Pv3JGV6tk2G8vJtDc" crossorigin="anonymous" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" integrity="sha384-Uq05+JLko69eOiPr39ta9bh7kld5PKZoU+fF7g0EXTAriEollhZ+DrN8Q/Oi8J2Q" crossorigin="anonymous" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js" integrity="sha384-/nfmYPUzWMS6v2atn8hbljz7NE0EI1iGx34lJaNzyVjWGDzMv+ciUZUeJpKA3Glc" crossorigin="anonymous" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js" integrity="sha384-AQLWHRKAgdTxkolJcLOELg4E9rE89CPE2xMy3tIRFn08NcGKPTsELdvKomqji+DL" crossorigin="anonymous" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js" integrity="sha384-U4fBROT3kCM582gaYiNaOSQiJbXPzd9SfR1598Y7yeGSYVBzikXrNg0XyuU+mOnl" crossorigin="anonymous" defer></script>
+  <!-- Prism.js syntax highlighting + xterm.js terminal — vendored from npm, not a CDN.
+       These used to load from cdn.jsdelivr.net, which meant a VPS behind a strict
+       egress firewall lost syntax highlighting and the embedded terminal entirely,
+       and the service worker could not pre-cache them (cross-origin), so the PWA
+       shell was never really offline-capable. Serving them from static/vendor also
+       lets the CSP drop jsdelivr from style-src and narrow it elsewhere.
+
+       SRI is intentionally absent: same-origin assets are already covered by the
+       page's own integrity guarantees, and the version is pinned in the path.
+       The ?v= query gives them the same immutable far-future caching as the rest
+       of static/ (see _serve_static in api/routes.py). -->
+  <link id="prism-theme" rel="stylesheet" href="static/vendor/prismjs/1.29.0/themes/prism-tomorrow.min.css?v=__WEBUI_VERSION__">
+  <script src="static/vendor/prismjs/1.29.0/components/prism-core.min.js?v=__WEBUI_VERSION__" defer></script>
+  <script src="static/vendor/prismjs/1.29.0/plugins/autoloader/prism-autoloader.min.js?v=__WEBUI_VERSION__" defer></script>
+  <script src="static/vendor/xterm/5.3.0/xterm.js?v=__WEBUI_VERSION__" defer></script>
+  <script src="static/vendor/xterm/5.3.0/xterm-addon-fit.js?v=__WEBUI_VERSION__" defer></script>
+  <script src="static/vendor/xterm/5.3.0/xterm-addon-web-links.js?v=__WEBUI_VERSION__" defer></script>
+  <!-- The autoloader fetches per-language grammars on demand. Without this it would
+       still resolve them against its own script origin's default CDN path. -->
+  <script defer>
+    window.addEventListener('DOMContentLoaded', function () {
+      if (window.Prism && Prism.plugins && Prism.plugins.autoloader) {
+        Prism.plugins.autoloader.languages_path = 'static/vendor/prismjs/1.29.0/components/';
+      }
+    });
+  </script>
   <!-- PWA service worker registration -->
   <script>
     if ('serviceWorker' in navigator) {

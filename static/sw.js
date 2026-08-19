@@ -37,6 +37,16 @@ const SHELL_ASSETS = [
   './static/terminal.js' + VQ,
   './static/onboarding.js' + VQ,
   './static/vendor/smd.min.js' + VQ,
+  // Vendored Prism + xterm (previously CDN-hosted, so un-cacheable cross-origin).
+  // Pre-caching them is what makes the offline shell genuinely self-contained.
+  './static/vendor/prismjs/1.29.0/components/prism-core.min.js' + VQ,
+  './static/vendor/prismjs/1.29.0/plugins/autoloader/prism-autoloader.min.js' + VQ,
+  './static/vendor/prismjs/1.29.0/themes/prism-tomorrow.min.css' + VQ,
+  './static/vendor/prismjs/1.29.0/themes/prism.min.css' + VQ,
+  './static/vendor/xterm/5.3.0/xterm.js' + VQ,
+  './static/vendor/xterm/5.3.0/xterm.css' + VQ,
+  './static/vendor/xterm/5.3.0/xterm-addon-fit.js' + VQ,
+  './static/vendor/xterm/5.3.0/xterm-addon-web-links.js' + VQ,
   './static/vendor/katex/0.16.22/katex.min.css' + VQ,
   './static/vendor/katex/0.16.22/katex.min.js' + VQ,
   './static/favicon.svg',
