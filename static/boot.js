@@ -539,6 +539,89 @@ function _installPwaSidebarSwipeGesture(){
 }
 _installPwaSidebarSwipeGesture();
 
+// ── Swipe-right to close the workspace slide-over ────────────────────────────
+//
+// The mirror of the left-edge swipe that opens the sidebar. Below --bp-tablet the
+// workspace panel is an overlay pinned to the right edge, and an overlay you can
+// only dismiss by hunting for a button feels stuck — every native app closes one
+// with the same gesture that opened it.
+//
+// Deliberately narrower than the sidebar gesture: it only starts on the panel
+// itself (so it cannot swallow transcript swipes), only when the panel is open,
+// and only in the compact band where the panel IS an overlay. On desktop the
+// panel is in-flow and has a resize handle, where a swipe would mean nothing.
+const _WS_SWIPE_CLAIM=12;             // px before we treat it as horizontal
+const _WS_SWIPE_TRIGGER=64;           // px of travel that dismisses
+const _WS_SWIPE_MAX_VERTICAL=56;      // beyond this it is a scroll, not a swipe
+let _wsPanelSwipe=null;
+
+function _wsPanelSwipeOpen(){
+  if(!_isCompactWorkspaceViewport()) return null;
+  const panel=document.querySelector('.rightpanel');
+  return (panel&&panel.classList.contains('mobile-open'))?panel:null;
+}
+
+function _onWsPanelSwipeStart(e){
+  const panel=_wsPanelSwipeOpen();
+  if(!panel) return;
+  const point=_pwaSidebarSwipePoint(e);
+  if(!point) return;
+  // Only gestures that begin inside the panel; anything else belongs to the
+  // transcript underneath.
+  if(!(e.target&&panel.contains(e.target))) return;
+  // A horizontally scrollable row inside the panel (a long path breadcrumb, a
+  // wide preview) owns its own horizontal gesture.
+  try{
+    const scroller=e.target.closest&&e.target.closest('*');
+    if(scroller&&scroller!==panel&&scroller.scrollWidth>scroller.clientWidth+1) return;
+  }catch(_){}
+  _wsPanelSwipe={startX:point.clientX,startY:point.clientY,claimed:false};
+}
+
+function _onWsPanelSwipeMove(e){
+  const swipe=_wsPanelSwipe;
+  if(!swipe) return;
+  const panel=_wsPanelSwipeOpen();
+  if(!panel){_wsPanelSwipe=null;return;}
+  const point=_pwaSidebarSwipePoint(e);
+  if(!point) return;
+  const dx=point.clientX-swipe.startX;
+  const dy=point.clientY-swipe.startY;
+  // Leftward or mostly-vertical: this is a scroll, hand it back.
+  if(dx<0||Math.abs(dy)>_WS_SWIPE_MAX_VERTICAL*1.5){_wsPanelSwipe=null;return;}
+  if(dx>=_WS_SWIPE_CLAIM&&dx>Math.abs(dy)*1.2) swipe.claimed=true;
+  if(!swipe.claimed) return;
+  // Track the finger so the gesture feels attached rather than fire-and-forget.
+  panel.style.transition='none';
+  panel.style.transform='translateX('+dx+'px)';
+  if(dx>=_WS_SWIPE_TRIGGER&&Math.abs(dy)<=_WS_SWIPE_MAX_VERTICAL){
+    _resetWsPanelTransform(panel);
+    _wsPanelSwipe=null;
+    if(typeof closeWorkspacePanel==='function') closeWorkspacePanel();
+  }
+}
+
+function _resetWsPanelTransform(panel){
+  if(!panel) return;
+  panel.style.transition='';
+  panel.style.transform='';
+}
+
+function _onWsPanelSwipeEnd(){
+  const panel=document.querySelector('.rightpanel');
+  // Below the trigger distance: spring back rather than leaving it half-open.
+  if(_wsPanelSwipe&&_wsPanelSwipe.claimed) _resetWsPanelTransform(panel);
+  _wsPanelSwipe=null;
+}
+
+function _installWorkspacePanelSwipeGesture(){
+  window.addEventListener('touchstart', _onWsPanelSwipeStart, {capture:true,passive:true});
+  window.addEventListener('touchmove', _onWsPanelSwipeMove, {capture:true,passive:true});
+  window.addEventListener('touchend', _onWsPanelSwipeEnd, {capture:true,passive:true});
+  window.addEventListener('touchcancel', _onWsPanelSwipeEnd, {capture:true,passive:true});
+}
+_installWorkspacePanelSwipeGesture();
+
 // ── Desktop sidebar collapse toggle ────────────────────────────────────────
 // Two discoverability paths into the same state:
 //   (1) Click the already-active rail icon → collapse / expand the sidebar.
