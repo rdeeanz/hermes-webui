@@ -15,7 +15,11 @@
 > **Re-audit: 2026-08-31 · Commit: `f1a60e46`** — pengukuran ulang seluruh
 > permukaan mobile di HEAD, lihat [§0.8](#08-re-audit-2026-08-31--pengukuran-ulang-di-f1a60e46).
 >
-> **STATUS: Fase 1, 2, dan 3 SELESAI.** Lihat
+> **STATUS: Fase 1, 2, dan 3 SELESAI; Fase 4 selesai sebagian; Fase 5 sebagian besar selesai.**
+> **Baru ingin ringkasan cepat berbahasa sederhana?** Lompat ke
+> [§0.13 Ringkasan Terbaru untuk Orang Awam](#013-ringkasan-terbaru-untuk-orang-awam-update-2026-08-31)
+> — status tiap fase, urutan pekerjaan berikutnya, dan cara menjalankan di
+> komputer sendiri, semuanya dengan bahasa yang mudah. Untuk detail teknis, lihat
 > [§0 Status Implementasi](#0-status-implementasi) untuk ringkasan apa yang sudah
 > dikerjakan, angka sebelum/sesudah yang terukur, dan apa yang masih tersisa.
 > **Sisa kerja tidak lagi diurut per sprint** — [§12](#12-backlog-terurut-prioritas)
@@ -46,6 +50,7 @@
    · [0.10 P1 terlaksana sebagian](#010-p1-terlaksana-sebagian-2026-08-31)
    · [0.11 P2 terlaksana](#011-p2-terlaksana-2026-08-31)
    · [0.12 P4 terlaksana + gerbang P4.1 diukur](#012-p4-terlaksana--dan-gerbang-p41-akhirnya-diukur-2026-08-31)
+   · **[0.13 Ringkasan Terbaru untuk Orang Awam](#013-ringkasan-terbaru-untuk-orang-awam-update-2026-08-31)** ← **paling mudah dibaca**
 1. [Ringkasan Eksekutif — Jawaban Jujur](#1-ringkasan-eksekutif--jawaban-jujur)
 2. [Codebase Ini Apa?](#2-codebase-ini-apa)
 3. [Tech Stack](#3-tech-stack)
@@ -1482,6 +1487,172 @@ menggambarkan salah satunya — assertion-nya diganti dengan propertinya (keduan
 menyegarkan **data**, `reload()` tetap di belakang guard-nya) dan **diperkuat**
 dengan test kedua bahwa daftar sesi tidak di-gate ke standalone sementara
 transkrip masih.
+
+---
+
+## 0.13 Ringkasan Terbaru untuk Orang Awam (Update 2026-08-31)
+
+> **Bagian ini ditulis dengan bahasa sesederhana mungkin.** Kalau Anda hanya
+> ingin tahu "sudah selesai apa saja, sisanya apa, dan bagaimana cara
+> menjalankannya di komputer sendiri" — cukup baca bagian ini. Bagian-bagian di
+> atas (§0.1–§0.12) adalah catatan teknis yang lebih detail.
+>
+> **Diverifikasi pada commit `351dcde1`** (commit paling baru saat dokumen ini
+> diperbarui). Semua tanda ✅ di bawah sudah dicek langsung ke dalam kode, bukan
+> sekadar disalin dari catatan lama.
+
+### Apa itu proyek ini, singkatnya
+
+Ini adalah **tampilan web (website) untuk Hermes Agent** — sebuah asisten AI yang
+berjalan di server Anda sendiri. Dengan proyek ini, Anda bisa mengobrol dengan
+agent AI lewat browser (di laptop maupun HP), bukan lewat terminal. Dibangun
+dengan **Python (backend)** dan **JavaScript biasa (frontend)** — sengaja **tanpa
+framework, tanpa build step** supaya ringan dan gampang dipasang.
+
+### Sudah selesai apa saja? (dari yang paling mendasar ke yang paling canggih)
+
+Bayangkan pengembangan ini seperti tangga bertingkat. Berikut kondisi tiap anak
+tangga sekarang:
+
+| Tahap | Isi | Status |
+|---|---|---|
+| **Fase 0 — Deploy dasar** | Bisa dipasang di VPS, dibuka dari HP, aman (pakai password/HTTPS) | ✅ **Kodenya siap.** Sisa satu langkah yang hanya bisa Anda lakukan sendiri: pasang di server ber-HTTPS lalu coba dari HP asli |
+| **Fase 1 — Perbaiki yang rusak** | Layout tablet diperbaiki, semua file pihak ketiga (Prism, xterm) dibawa ke dalam repo (tak lagi ambil dari internet), scroll melebar dihilangkan, ada test otomatis untuk berbagai ukuran layar | ✅ **Selesai** |
+| **Fase 2 — Nyaman di HP** | Semua fitur & pengaturan bisa diakses dari HP, ada panel geser dari bawah (bottom sheet), zoom diizinkan di browser, gestur usap, bahasa Indonesia ditambahkan (sebagian) | ✅ **Selesai** (kecuali 1 hal kecil: filter tabel di HP, lihat daftar sisa) |
+| **Fase 3 — Notifikasi push** | Dapat notifikasi di HP walau browser sudah ditutup (misalnya saat agent butuh persetujuan atau tugas panjang selesai) | ✅ **Selesai** — dibuat tanpa menambah paket baru |
+| **Fase 4 — Kecepatan** | Aplikasi jadi lebih ringan & cepat dibuka; bisa jalan sebagian tanpa internet | 🟡 **Selesai sebagian** — ukuran unduhan awal turun **31,7%** (dari ~1.497 KB jadi ~1.022 KB). Dua pekerjaan dihentikan sengaja karena risikonya lebih besar dari manfaatnya |
+| **Fase 5 — Rasa seperti aplikasi asli** | Getaran saat menekan tombol, badge angka di ikon, berbagi ke aplikasi lain, animasi halus, dukungan pembaca layar (aksesibilitas) | ✅ **Sebagian besar selesai** — digabung ke dalam P2.2 (aksesibilitas) dan P4.2 (rasa native) |
+
+**Kesimpulan gampangnya:** aplikasi ini **sudah bisa dipakai sehari-hari dari HP
+dan laptop hari ini.** Yang tersisa bukan fitur dasar yang belum ada, melainkan
+penghalusan (bahasa Indonesia yang lebih lengkap, sedikit optimasi kecepatan
+tambahan) dan satu langkah pemasangan di server yang harus Anda kerjakan sendiri.
+
+### Yang BELUM selesai — dan kenapa
+
+Beberapa hal sengaja **dihentikan** setelah diukur, karena ternyata usahanya
+besar tapi manfaatnya kecil, atau berisiko merusak yang sudah jalan. Ini
+keputusan sadar, bukan pekerjaan yang terlupa.
+
+| Sisa pekerjaan | Status | Kenapa belum |
+|---|---|---|
+| **Bahasa Indonesia belum 100% lengkap** | Belum | Baru ±163 dari 1.713 kata/frasa yang diterjemahkan (bagian inti sudah, seperti chat, login, navigasi). Sisanya (pengaturan, onboarding, cron) sengaja dibiarkan Bahasa Inggris dulu — menerjemahkan menu berbahaya seperti "matikan keamanan" secara asal justru lebih berisiko |
+| **Filter tabel di HP** | Belum | Perlu membuat komponen baru. Ini penambahan fitur, bukan perbaikan, jadi ditunda sampai ada yang benar-benar membutuhkannya |
+| **Memuat `panels.js` belakangan (lazy)** | ⛔ Dihentikan | Setelah diukur, bagian ini terlalu saling terkait dengan bagian lain untuk dipisah dengan aman. Menunggu keputusan pemilik proyek |
+| **Memecah file CSS** | ⛔ Dihentikan | Hanya menghemat ~18 KB (1,8%) tapi berisiko merusak tampilan 20 tema. Rasio untung-rugi paling buruk |
+| **Memecah file JavaScript besar** (`ui.js`, `sessions.js`, `messages.js`) | ⛔ Belum dikerjakan | Ini pekerjaan besar & berisiko tinggi (1–2 minggu). Hanya dikerjakan kalau kecepatan setelah Fase 4 masih dianggap kurang. Menunggu keputusan pemilik proyek |
+
+### Urutan pekerjaan berikutnya (dari yang paling penting)
+
+Kalau ingin melanjutkan proyek ini, kerjakan sesuai urutan ini:
+
+1. **(WAJIB, hanya Anda yang bisa) Pasang di server ber-HTTPS lalu tes notifikasi
+   dari HP asli.** Semua kodenya sudah siap, tapi belum pernah dites ke HP betulan
+   karena butuh server dengan HTTPS. Panduannya ada di
+   [`docs/reverse-proxy.md`](docs/reverse-proxy.md). Ini paling penting karena
+   membuka fitur yang sudah dibangun tapi belum bisa "menyala": Web Push dan
+   pemasangan aplikasi (PWA) di iPhone.
+
+2. **Ambil keputusan soal dua pekerjaan Fase 4 yang dihentikan** (`panels.js`
+   lazy dan pemecahan CSS). Datanya sudah lengkap di [§0.10](#010-p1-terlaksana-sebagian-2026-08-31);
+   tinggal diputuskan: dikerjakan, dikerjakan sebagian, atau dilepas.
+
+3. **Lengkapi terjemahan Bahasa Indonesia** (P3.1). Kerjakan bertahap: menu
+   Pengaturan dulu → Onboarding → Cron → Ekstensi. Satu kelompok per sekali kerja.
+
+4. **Filter tabel markdown di HP** (P3.2). Kerjakan kalau memang ada yang butuh.
+
+5. **(Opsional, berisiko tinggi) Pecah file JavaScript inti** (P4.1). Hanya kalau
+   kecepatan masih dirasa kurang setelah semua di atas selesai. Skor kecepatan
+   (Lighthouse) saat ini **76**, target ≥ 85.
+
+> **Catatan koreksi kecil:** di [Lampiran A](#lampiran-a--ringkasan-file-kunci)
+> masih tertulis `manifest.json` "belum punya `share_target`". Itu sudah usang —
+> fitur berbagi (`share_target`) **sudah ada** di `manifest.json` sejak P4.2
+> selesai.
+
+### Cara menjalankan proyek ini di komputer sendiri (langkah demi langkah)
+
+Berikut cara paling gampang untuk mencoba aplikasi ini di laptop/PC Anda untuk
+keperluan pengembangan (development). Ikuti berurutan.
+
+**Syarat awal:**
+
+- Sistem operasi **Linux, macOS, atau Windows lewat WSL2** (Windows asli belum
+  didukung oleh `bootstrap.py`).
+- **Python versi 3.11 sampai 3.13** sudah terpasang. Cek dengan: `python3 --version`
+- **Git** sudah terpasang.
+- **Hermes Agent** idealnya sudah terpasang di komputer yang sama. Kalau belum,
+  `bootstrap.py` akan menawarkan memasangnya otomatis. (Tanpa agent, aplikasi
+  tetap bisa dibuka dan tampilannya jalan, tapi tidak bisa benar-benar mengobrol
+  dengan AI.)
+
+**Langkah 1 — Ambil kodenya (clone):**
+
+```bash
+git clone https://github.com/nesquena/hermes-webui.git hermes-webui
+cd hermes-webui
+```
+
+**Langkah 2 — Jalankan servernya:**
+
+```bash
+python3 bootstrap.py
+```
+
+Perintah ini otomatis melakukan banyak hal untuk Anda: mendeteksi Hermes Agent
+(dan menawarkan memasangnya kalau belum ada), menyiapkan environment Python
+beserta dependensinya, lalu menyalakan server web. Server berjalan di
+**foreground** — artinya jendela terminal ini akan "tertahan" menampilkan log.
+Untuk **menghentikannya, tekan `Ctrl-C`**.
+
+> Alternatif: `./start.sh` — sama saja, tapi launcher ini juga otomatis mencetak
+> perintah "SSH tunnel" bila Anda mengaksesnya lewat SSH.
+
+**Langkah 3 — Buka di browser:**
+
+Buka `http://127.0.0.1:8787` di browser Anda. Kalau ini pertama kali,
+akan muncul **wizard onboarding** yang memandu Anda menyiapkan provider AI.
+
+**Langkah 4 (opsional) — Ganti port atau izinkan akses dari HP di jaringan lokal:**
+
+```bash
+# Ganti port jadi 9000:
+HERMES_WEBUI_PORT=9000 python3 bootstrap.py
+
+# Izinkan diakses dari perangkat lain di jaringan (mis. HP) — WAJIB pasang password:
+HERMES_WEBUI_HOST=0.0.0.0 HERMES_WEBUI_PASSWORD=rahasia-panjang python3 bootstrap.py
+```
+
+> ⚠️ Jangan pakai `HERMES_WEBUI_HOST=0.0.0.0` tanpa `HERMES_WEBUI_PASSWORD` —
+> itu membuka aplikasi ke jaringan tanpa penjagaan.
+
+**Menjalankan sebagai layanan latar (untuk VPS/server), bukan foreground:**
+
+```bash
+./ctl.sh start              # jalan di belakang layar, PID disimpan di ~/.hermes/webui.pid
+./ctl.sh status             # lihat status: PID, uptime, port, lokasi log, /health
+./ctl.sh logs --lines 100   # lihat 100 baris log terakhir
+./ctl.sh restart            # restart
+./ctl.sh stop               # hentikan
+```
+
+> ⚠️ `./ctl.sh stop` hanya bisa menghentikan proses yang **ia sendiri** jalankan
+> (lewat `ctl.sh start`). Kalau Anda menyalakan lewat `bootstrap.py`/`start.sh`,
+> hentikan dengan `Ctrl-C`, atau cari prosesnya: `lsof -i :8787` lalu `kill <PID>`.
+
+**Menjalankan test (untuk memastikan tidak ada yang rusak):**
+
+```bash
+./scripts/test.sh                                 # jalankan seluruh test
+./scripts/test.sh tests/test_mobile_layout.py -v  # jalankan satu file test saja
+```
+
+> Selalu pakai `./scripts/test.sh`, jangan `pytest` langsung. Script ini otomatis
+> membuat/memakai environment `.venv`, mengunci Python ke versi 3.11–3.13, dan
+> memasang dependensi test yang kurang. Menjalankan `pytest` langsung bisa gagal
+> karena versi Python yang tidak cocok.
+
 ---
 
 ## 1. Ringkasan Eksekutif — Jawaban Jujur
@@ -3305,7 +3476,7 @@ menunggu Anda; keduanya tidak memblokir P3/P4.
 | `static/offline.html` | **15,2 KB** | 5,0 | **Baru (P2.1)** — shell offline read-only; membaca `hermes-data-v1` + antrian, nol request eksternal, nol dependensi bundel aplikasi |
 | `static/vendor/mermaid/10.9.3/` | 3,18 MB | 971 | **Baru (P2.3)** — lazy, tidak di-pre-cache |
 | `static/vendor/pdfjs/4.9.155/` | 1,64 MB | 487 | **Baru (P2.3)** — lazy; `.mjs` butuh entri `_STATIC_MIME` atau browser menolaknya tanpa pesan |
-| `static/manifest.json` | 1,2 KB | — | Manifest PWA — **belum punya `share_target`** ([P4.2](#p42--native-feel-diurutkan-menurut-apa-yang-benar-benar-terasa---selesai)) |
+| `static/manifest.json` | 1,2 KB | — | Manifest PWA — kini **sudah punya `share_target`** (dibuat di [P4.2](#p42--native-feel-diurutkan-menurut-apa-yang-benar-benar-terasa---selesai)) |
 | `tests/test_mobile_layout.py` | — | Regresi mobile statis (breakpoint, markup, overflow) |
 | `tests/browser_responsive.py` | — | **Baru (Fase 1.5)** — gerbang layout di browser sungguhan, 9 viewport |
 | `tests/test_breakpoint_contract.py` | — | **Baru (Fase 1.1)** — menyandingkan breakpoint CSS ↔ JS |
