@@ -116,7 +116,11 @@ class TestIndexHtmlSmdScript:
         (escapes /hermes/-style subpath mounts). The `./` form is the only
         shape that satisfies both: ES-spec-valid AND mount-agnostic.
         """
-        assert "from './static/vendor/smd.min.js'" in INDEX_HTML, (
+        # Prefix match, not an exact-string match: the URL carries the
+        # ?v=__WEBUI_VERSION__ cache-buster so sw.js can pre-cache it (a
+        # pre-cache entry whose query differs from the requested one never
+        # serves). The property under test is the `./` form, not the query.
+        assert "from './static/vendor/smd.min.js" in INDEX_HTML, (
             "index.html must use the './static/vendor/smd.min.js' form — "
             "bare specifiers are rejected by the ES module spec (#1849) and "
             "leading-/ paths break subpath deployments such as /hermes/"

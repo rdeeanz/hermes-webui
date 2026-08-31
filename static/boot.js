@@ -2214,12 +2214,58 @@ $('btnNewChat').onclick=async()=>{
   }
   await newSession();await renderSessionList();closeMobileSidebar();$('msg').focus();
 };
-$('btnDownload').onclick=()=>{
+$('btnDownload').onclick=async()=>{
   if(!S.session)return;
-  const blob=new Blob([transcript()],{type:'text/markdown'});
+  const name=`hermes-${S.session.session_id}.md`;
+  const md=transcript();
+  // On a phone, "download a .md file" is close to useless — it lands in a
+  // Downloads folder most mobile OSes barely surface. The share sheet is what
+  // the user actually wants: send the transcript to Notes, Drive, a chat.
+  //
+  // Only attempted when the platform will really take a FILE. canShareFiles()
+  // is a distinct question from navigator.share existing, and sharing a
+  // transcript as `text:` instead would silently truncate it.
+  const native=window.HermesNative;
+  if(native&&native.shareSupported()){
+    let file=null;
+    try{ file=new File([md],name,{type:'text/markdown'}); }catch(_){ file=null; }
+    if(file&&native.canShareFiles([file])){
+      const outcome=await native.share({title:(S.session.title||'Hermes'),files:[file]});
+      if(outcome==='shared'){ native.haptic('confirm'); return; }
+      if(outcome==='cancelled') return;
+      // unsupported/failed → fall through to the download below
+    }
+  }
+  const blob=new Blob([md],{type:'text/markdown'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download=`hermes-${S.session.session_id}.md`;a.click();URL.revokeObjectURL(a.href);
+  a.download=name;a.click();URL.revokeObjectURL(a.href);
 };
+// Hand a share link to the OS share sheet when there is one.
+//
+// Returns true only when the platform actually took it, so every caller keeps
+// its copy-to-clipboard path as the fallback. Three outcomes, three behaviours:
+//
+//   shared      done — no toast, the OS already gave feedback
+//   cancelled   the user dismissed the sheet. Treated as handled: falling
+//               through to "copied + opened a new tab" would do two things
+//               they just declined
+//   unsupported /failed  not handled; the caller copies the link as before
+async function _offerNativeShareOfLink(href){
+  const native=window.HermesNative;
+  if(!native||!native.shareSupported()) return false;
+  // Desktop browsers expose navigator.share but route it to a limited picker;
+  // the clipboard is the better affordance there, where a mouse and a URL bar
+  // are right at hand. On a phone the share sheet is the whole point.
+  if(typeof _isPhoneWidthViewport==='function'&&!_isPhoneWidthViewport()) return false;
+  const title=(S.session&&S.session.title)||'Hermes';
+  const outcome=await native.share({title:String(title).slice(0,120),url:href});
+  if(outcome==='shared'){
+    if(window.HermesNative) window.HermesNative.haptic('confirm');
+    return true;
+  }
+  return outcome==='cancelled';
+}
+
 function _buildSessionExportUrl(sessionId,params){
   const url=new URL('api/session/export',document.baseURI||location.href);
   url.searchParams.set('session_id',String(sessionId||''));
@@ -2246,6 +2292,7 @@ $('btnShareSession').onclick=async()=>{
         cancelLabel:t('share_session_refresh_snapshot'),
       });
       if(reuse){
+        if(await _offerNativeShareOfLink(existing)) return;
         await _copyText(existing);
         showToast(t('share_session_link_copied'));
         window.open(existing,'_blank','noopener');
@@ -2255,9 +2302,10 @@ $('btnShareSession').onclick=async()=>{
     const res=await api('/api/share/create',{method:'POST',body:JSON.stringify({session_id:S.session.session_id})});
     if(res&&res.session) S.session=res.session;
     const href=new URL(String(res&&res.share&&res.share.url||''),location.origin).href;
+    if(typeof _syncHermesPanelSessionActions==='function') _syncHermesPanelSessionActions();
+    if(await _offerNativeShareOfLink(href)) return;
     await _copyText(href);
     showToast(t('share_session_created'));
-    if(typeof _syncHermesPanelSessionActions==='function') _syncHermesPanelSessionActions();
     window.open(href,'_blank','noopener');
   }catch(err){
     showToast(t('share_session_failed')+(err&&err.message?err.message:String(err||'')),4000,'error');
@@ -4064,6 +4112,280 @@ function _showServerStopped() {
   document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:var(--muted);font-family:var(--font-ui);font-size:14px"><p>' + stoppedMsg + '</p></div>';
 }
 
+// ── Screen-reader plumbing ───────────────────────────────────────────────────
+//
+// Two things every overlay in this app needed and none of them had, plus one
+// announcer that existed but was used for exactly one string.
+//
+// WHY isolate() IS NOT JUST A TAB TRAP
+//   The bottom sheet already trapped Tab. On a phone that buys nothing: a
+//   VoiceOver or TalkBack user does not Tab, they swipe through the accessibility
+//   tree, and a Tab handler cannot stop that. They would swipe straight out of an
+//   open sheet into the chat behind it with no indication they had left, then
+//   activate a control that is visually covered.
+//
+//   What actually confines them is `aria-modal="true"` on the dialog plus
+//   `aria-hidden` on everything outside it. `inert` is added alongside because it
+//   is the same statement for pointer and keyboard, and it makes the Tab trap
+//   redundant on browsers that support it (the trap stays as the fallback for
+//   the ones that do not).
+//
+// WHY THE ANNOUNCER NEEDS A FLOOR
+//   A live region fed on every state change is worse than no live region: the
+//   speech queue backs up and the user cannot hear anything else, including what
+//   they are typing. So: identical text never repeats, and there is a minimum gap
+//   between utterances with last-write-wins inside it — a burst of five status
+//   changes speaks once, with the newest text.
+(function(){
+  'use strict';
+
+  var FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),' +
+                  'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+  // Marking these inert/aria-hidden is meaningless (they render nothing) and
+  // makes the DOM noisy to read while debugging.
+  var UNRENDERED = {SCRIPT:1, STYLE:1, LINK:1, META:1, TITLE:1, TEMPLATE:1, HEAD:1, BASE:1, NOSCRIPT:1};
+
+  function _focusables(root){
+    return Array.prototype.filter.call(root.querySelectorAll(FOCUSABLE), function(n){
+      return n.offsetParent !== null || n === document.activeElement;
+    });
+  }
+
+  function focusFirst(root){
+    if(!root) return false;
+    var items = _focusables(root);
+    if(items.length){ try{ items[0].focus(); return true; }catch(_){ } }
+    // Nothing focusable inside: make the container itself the focus target so
+    // the screen reader lands on the dialog and reads its label, rather than
+    // leaving focus on a control that is now hidden behind the overlay.
+    //
+    // The result is CHECKED rather than assumed. A zero-size container (an empty
+    // panel that has not been populated yet) is not focusable at all, and
+    // .focus() on one fails silently — reporting success there would make this
+    // function lie to any caller that branches on it.
+    try{
+      if(!root.hasAttribute('tabindex')) root.setAttribute('tabindex', '-1');
+      root.focus();
+      return document.activeElement === root;
+    }catch(_){ return false; }
+  }
+
+  /**
+   * Make `el` the only thing a screen reader, a pointer, or the Tab key can
+   * reach, and return the function that undoes it.
+   *
+   * @param {Element} el
+   * @param {{role?:string, label?:string, opener?:Element, onEscape?:Function,
+   *          skip?:Element[], moveFocus?:boolean}} [opts]
+   * @returns {Function} release()
+   */
+  function isolate(el, opts){
+    opts = opts || {};
+    if(!el) return function(){ };
+    var undo = [];
+    var skip = opts.skip || [];
+
+    var addAttr = function(node, name, value){
+      if(node.hasAttribute(name)) return;
+      node.setAttribute(name, value);
+      undo.push(function(){ node.removeAttribute(name); });
+    };
+
+    addAttr(el, 'role', opts.role || 'dialog');
+    addAttr(el, 'aria-modal', 'true');
+    if(opts.label && !el.getAttribute('aria-labelledby')) addAttr(el, 'aria-label', opts.label);
+
+    // Walk from the dialog up to <body>, hiding each level's other children.
+    // Ancestors themselves stay visible — aria-hidden on an ancestor of the
+    // focused element is invalid and browsers handle it inconsistently.
+    var node = el;
+    while(node && node.parentElement){
+      var parent = node.parentElement;
+      var kids = parent.children;
+      for(var i = 0; i < kids.length; i++){
+        var sib = kids[i];
+        if(sib === node) continue;
+        if(UNRENDERED[sib.tagName]) continue;
+        if(skip.indexOf(sib) !== -1) continue;
+        // Already hidden by its own logic (a closed dialog, a decorative
+        // overlay). Leave it entirely alone, so release() cannot reveal
+        // something that was never ours to reveal.
+        if(sib.hasAttribute('aria-hidden') || sib.hasAttribute('inert')) continue;
+        sib.setAttribute('aria-hidden', 'true');
+        sib.setAttribute('inert', '');
+        undo.push((function(n){
+          return function(){ n.removeAttribute('aria-hidden'); n.removeAttribute('inert'); };
+        })(sib));
+      }
+      node = parent;
+    }
+
+    var onKey = function(e){
+      if(e.key === 'Escape'){
+        if(opts.onEscape){ e.stopPropagation(); opts.onEscape(e); }
+        return;
+      }
+      if(e.key !== 'Tab') return;
+      // Fallback for browsers without `inert` (Firefox < 112, Safari < 15.5).
+      // Where inert works this never fires, because focus cannot leave anyway.
+      var items = _focusables(el);
+      if(!items.length) return;
+      var first = items[0], last = items[items.length - 1];
+      if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey, true);
+
+    var opener = opts.opener || document.activeElement;
+    if(opts.moveFocus !== false) focusFirst(el);
+
+    return function release(){
+      document.removeEventListener('keydown', onKey, true);
+      for(var i = undo.length - 1; i >= 0; i--){
+        try{ undo[i](); }catch(_){ }
+      }
+      undo.length = 0;
+      // Return focus, or a keyboard user is dumped at the top of the document
+      // and a screen-reader user loses their place entirely.
+      if(opener && typeof opener.focus === 'function' && opener.isConnected){
+        try{ opener.focus(); }catch(_){ }
+      }
+    };
+  }
+
+  var MIN_GAP_MS = 1200;
+  var _timer = null;
+  var _pending = null;
+  var _lastText = '';
+  var _lastAt = 0;
+
+  /**
+   * Speak `text` through the shared #a11yAnnouncer live region.
+   *
+   * @param {string} text
+   * @param {{assertive?:boolean, minGapMs?:number, force?:boolean}} [opts]
+   */
+  function announce(text, opts){
+    opts = opts || {};
+    var region = document.getElementById('a11yAnnouncer');
+    if(!region || !text) return;
+    text = String(text);
+    // Never say the same thing twice in a row unless explicitly asked to. This
+    // is what makes it safe to call announce() from a polling path.
+    if(text === _lastText && !opts.force) return;
+    var gap = (opts.minGapMs == null) ? MIN_GAP_MS : opts.minGapMs;
+    _pending = {text: text, assertive: !!opts.assertive, force: !!opts.force};
+    if(_timer) return;   // a flush is already queued; it will pick up the latest
+    var wait = Math.max(0, _lastAt + gap - Date.now());
+    _timer = setTimeout(function(){
+      _timer = null;
+      var p = _pending;
+      _pending = null;
+      if(!p) return;
+      // assertive interrupts whatever is being read. Reserved for things the
+      // user must act on (an approval), never for progress.
+      region.setAttribute('aria-live', p.assertive ? 'assertive' : 'polite');
+      if(p.force && region.textContent === p.text){
+        // Same string again: a live region only fires on CHANGE, so it has to
+        // be emptied first, in a separate task.
+        region.textContent = '';
+        setTimeout(function(){ region.textContent = p.text; }, 60);
+      } else {
+        region.textContent = p.text;
+      }
+      _lastText = p.text;
+      _lastAt = Date.now();
+    }, wait);
+  }
+
+  window.HermesA11y = {
+    announce: announce,
+    isolate: isolate,
+    focusFirst: focusFirst,
+    FOCUSABLE: FOCUSABLE,
+    MIN_GAP_MS: MIN_GAP_MS,
+  };
+})();
+
+// ── Drawer + slide-over a11y ─────────────────────────────────────────────────
+//
+// The sidebar drawer and the workspace slide-over are both full-screen overlays
+// at phone width, and neither was a dialog to a screen reader: no role, no
+// aria-modal, no focus move, no Escape, and the whole chat still swipeable
+// underneath. The bottom sheet had all of that; these two predate it.
+//
+// WHY AN OBSERVER RATHER THAN A CALL AT EACH TOGGLE
+//   `mobile-open` is added in five places across boot.js and panels.js (the
+//   toggle button, the edge-swipe gesture, two panel-navigation paths, a session
+//   route) and removed in two. Threading isolate()/release() through all seven
+//   means the next person who adds an eighth gets a drawer that is silently
+//   inaccessible again — the exact failure that produced this state.
+//
+//   The class is the single fact both CSS and this agree on, so watching it
+//   covers every present and future call site. It also self-corrects: the class
+//   is only ever set in overlay mode, so at tablet width, where the sidebar is
+//   in-flow and must NOT be isolated, the observer simply never fires.
+(function(){
+  'use strict';
+
+  var OVERLAYS = [
+    {
+      selector: '.sidebar',
+      labelKey: 'sidebar_drawer_label',
+      fallback: 'Sessions and panels',
+      close: function(){ if(typeof closeMobileSidebar === 'function') closeMobileSidebar(); },
+    },
+    {
+      selector: '.rightpanel',
+      labelKey: 'workspace_panel_label',
+      fallback: 'Workspace',
+      close: function(){ if(typeof closeWorkspacePanel === 'function') closeWorkspacePanel(); },
+    },
+  ];
+
+  function _label(spec){
+    if(typeof t === 'function'){
+      var val = t(spec.labelKey);
+      if(val && val !== spec.labelKey) return val;
+    }
+    return spec.fallback;
+  }
+
+  function _watch(spec){
+    var el = document.querySelector(spec.selector);
+    if(!el) return;
+    var release = null;
+    var firstSync = true;
+    var sync = function(){
+      var open = el.classList.contains('mobile-open');
+      if(open && !release){
+        release = window.HermesA11y ? window.HermesA11y.isolate(el, {
+          label: _label(spec),
+          onEscape: spec.close,
+          // On the very first pass this is page load, not a user action — a
+          // session route can boot with the drawer already open, and pulling
+          // focus into it before the reader has done anything is its own kind
+          // of surprise. Every later toggle IS a user action, so focus moves.
+          moveFocus: !firstSync,
+        }) : null;
+      } else if(!open && release){
+        var r = release;
+        release = null;
+        r();
+      }
+      firstSync = false;
+    };
+    new MutationObserver(sync).observe(el, {attributes: true, attributeFilter: ['class']});
+    sync();
+  }
+
+  function _initOverlayA11y(){ OVERLAYS.forEach(_watch); }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _initOverlayA11y, {once: true});
+  else _initOverlayA11y();
+})();
+
 // ── Bottom sheet controller ──────────────────────────────────────────────────
 //
 // Presents an element as a bottom sheet at phone width and leaves it as whatever
@@ -4081,9 +4403,9 @@ function _showServerStopped() {
 (function(){
   'use strict';
 
-  var FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),' +
-                  'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-  var _open = null;          // { el, opener, onKey, onBackdrop, pointer handlers }
+  // Focus handling (entry, trap, return) belongs to HermesA11y.isolate(); this
+  // module only decides how the element is DRAWN.
+  var _open = null;          // { el, onBackdrop, detachDrag, release }
   var _backdrop = null;
 
   function _sheetMode(){
@@ -4095,29 +4417,12 @@ function _showServerStopped() {
     if(_backdrop && _backdrop.isConnected) return _backdrop;
     _backdrop = document.createElement('div');
     _backdrop.className = 'mobile-sheet-backdrop';
+    // Decorative, and its own tap-to-dismiss target. Marking it aria-hidden here
+    // means HermesA11y.isolate() skips it (it only touches siblings that are not
+    // already hidden), so it never gets `inert` — which would swallow the tap.
+    _backdrop.setAttribute('aria-hidden', 'true');
     document.body.appendChild(_backdrop);
     return _backdrop;
-  }
-
-  function _focusables(el){
-    return Array.prototype.filter.call(el.querySelectorAll(FOCUSABLE), function(n){
-      return n.offsetParent !== null || n === document.activeElement;
-    });
-  }
-
-  function _trap(e){
-    if(!_open || e.key !== 'Tab') return;
-    var items = _focusables(_open.el);
-    if(!items.length) return;
-    var first = items[0], last = items[items.length - 1];
-    if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
-    else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
-  }
-
-  function _onKey(e){
-    if(!_open) return;
-    if(e.key === 'Escape'){ e.stopPropagation(); dismiss(_open.el); return; }
-    _trap(e);
   }
 
   // Swipe-down to dismiss. Only starts when the sheet is already scrolled to the
@@ -4185,13 +4490,19 @@ function _showServerStopped() {
     backdrop.addEventListener('click', onBackdrop);
 
     var detachDrag = _attachDrag(el);
-    document.addEventListener('keydown', _onKey, true);
 
-    _open = { el: el, opener: (opts.opener || document.activeElement), onBackdrop: onBackdrop, detachDrag: detachDrag };
+    // Escape, the Tab trap, focus entry, focus return, role/aria-modal, and
+    // aria-hidden + inert on everything outside the sheet — all of it lives in
+    // HermesA11y.isolate() so the sheet, the sidebar drawer and the workspace
+    // slide-over cannot drift apart on any of those.
+    var release = window.HermesA11y ? window.HermesA11y.isolate(el, {
+      label: opts.label || null,
+      opener: opts.opener || document.activeElement,
+      skip: [backdrop],
+      onEscape: function(){ dismiss(el); },
+    }) : null;
 
-    var items = _focusables(el);
-    if(items.length) items[0].focus();
-    else { el.setAttribute('tabindex', '-1'); el.focus(); }
+    _open = { el: el, onBackdrop: onBackdrop, detachDrag: detachDrag, release: release };
     return true;
   }
 
@@ -4207,14 +4518,11 @@ function _showServerStopped() {
         if(_open.onBackdrop) _backdrop.removeEventListener('click', _open.onBackdrop);
       }
       if(_open.detachDrag) _open.detachDrag();
-      document.removeEventListener('keydown', _onKey, true);
-      var opener = _open.opener;
+      var release = _open.release;
       _open = null;
-      // Return focus so keyboard and screen-reader users are not dumped at the
-      // top of the document.
-      if(opener && typeof opener.focus === 'function' && opener.isConnected){
-        try{ opener.focus(); }catch(_){ }
-      }
+      // Restores aria-hidden/inert on the rest of the page and returns focus to
+      // whatever opened the sheet.
+      if(release) release();
     }
   }
 
@@ -4230,4 +4538,86 @@ function _showServerStopped() {
   });
 
   window.HermesSheet = { present: present, dismiss: dismiss, isOpen: isOpen, isSheetMode: _sheetMode };
+})();
+
+// ── Share Target: deliver what another app shared into the composer ──────────
+//
+// Producers are sw.js (files + text, via the `hermes-share-inbox` cache) and
+// the /share-target server fallback (text only, via the query string).
+// HermesNative.consumePendingShare hides which one it came from.
+//
+// Three rules, each learned from how share targets usually go wrong:
+//
+//   1. NEVER auto-send. The share sheet is one tap; sending a message to an
+//      agent on one accidental tap is not recoverable. The text lands in the
+//      composer and the user presses send.
+//   2. NEVER clobber a draft. Appending rather than replacing means a share
+//      arriving on top of half-typed text costs nothing.
+//   3. Say what happened. The user tapped "share" in a different app and got
+//      dropped into this one — a toast is what connects the two.
+(function(){
+  'use strict';
+
+  function _applyShared(payload){
+    const msg=(typeof $==='function')?$('msg'):document.getElementById('msg');
+    const text=String((payload&&payload.text)||'').trim();
+    const files=(payload&&payload.files)||[];
+
+    if(msg&&text){
+      const existing=String(msg.value||'');
+      // Rule 2: append, with a blank line so the two are visually distinct.
+      msg.value=existing.trim() ? (existing.replace(/\s+$/,'')+'\n\n'+text) : text;
+      if(typeof autoResize==='function') autoResize();
+      if(typeof updateSendBtn==='function') updateSendBtn();
+      try{
+        msg.focus();
+        // Caret at the end, so typing continues after the shared text rather
+        // than in front of it.
+        msg.setSelectionRange(msg.value.length,msg.value.length);
+      }catch(_){ }
+    }
+
+    if(files.length && typeof addFiles==='function'){
+      // addFiles() already enforces MAX_UPLOAD_BYTES and de-dupes by name.
+      addFiles(files);
+    }
+
+    let dropped=false;
+    try{ dropped=new URLSearchParams(location.search).get('share_files_dropped')==='1'; }catch(_){ }
+
+    if(typeof showToast==='function'){
+      const key=dropped?'share_received_files_dropped':'share_received';
+      const fallback=dropped
+        ? 'Shared text added. Files need the app open — try sharing again.'
+        : 'Added what you shared to the composer.';
+      let label=fallback;
+      if(typeof t==='function'){
+        const val=t(key);
+        if(val&&val!==key) label=val;
+      }
+      showToast(label,dropped?5000:3000);
+    }
+    if(window.HermesNative) window.HermesNative.haptic('confirm');
+  }
+
+  function _initShareDrain(){
+    // Not order-dependent on purpose. A `defer` script's readyState is already
+    // 'interactive' when it runs, so an immediate call here would fire while
+    // later deferred scripts — including native.js — had not executed yet, and
+    // the early return would drop the share with no retry. DOMContentLoaded is
+    // the first moment every deferred script has run.
+    if(!window.HermesNative||typeof window.HermesNative.consumePendingShare!=='function') return;
+    // Deferred to idle: this reads CacheStorage, and nothing about it should sit
+    // in front of first paint. A share is already a navigation the user made on
+    // purpose — a few hundred milliseconds later is invisible.
+    const run=()=>{ void window.HermesNative.consumePendingShare(_applyShared); };
+    if(typeof requestIdleCallback==='function') requestIdleCallback(run,{timeout:2000});
+    else setTimeout(run,300);
+  }
+
+  if(document.readyState==='loading'||document.readyState==='interactive'){
+    document.addEventListener('DOMContentLoaded',_initShareDrain,{once:true});
+  } else {
+    _initShareDrain();
+  }
 })();

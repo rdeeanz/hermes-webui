@@ -1,15 +1,21 @@
-"""Regression test for #1850 — CSP connect-src must allow the lazy CDN libraries.
+"""Regression test for #1850 — connect-src and the CDN that no longer exists.
 
-Originally this covered xterm.js, whose bundled source map was fetched from
-cdn.jsdelivr.net at runtime. xterm and Prism are vendored under static/vendor now
-(with sourceMappingURL stripped), so the remaining consumers are the two modules
-ui.js still imports lazily from the CDN: PDF.js (workspace PDF preview) and
-Mermaid (diagram rendering). Their fetches are subject to connect-src, so the
-policy must keep allowing them or the browser blocks the import and emits CSP
-violations.
+HISTORY
+  #1850 was the opposite of what this file now asserts. xterm.js was loaded from
+  cdn.jsdelivr.net, DevTools fetched its bundled source map over `connect`, and
+  `connect-src 'self'` blocked it — so the fix was to ADD the CDN origin here.
+  Later, Prism and xterm were vendored (with sourceMappingURL stripped) and the
+  grant narrowed to two paths for the libraries ui.js still imported lazily:
+  PDF.js and Mermaid.
 
-The grant is now path-scoped rather than whole-origin — see _CSP_JSDELIVR_LAZY_LIBS
-in api/helpers.py.
+  Both of those are vendored under static/vendor/ now, so no directive in the
+  policy names a CDN. This test is kept, and inverted, because "put jsdelivr
+  back in connect-src" is exactly the shape of the change someone would make
+  while chasing a broken lazy import — and doing that would quietly restore
+  outbound egress as a requirement for a feature that no longer needs it.
+
+  The whole-file ban lives in tests/test_vendored_frontend_assets.py; this file
+  keeps the directive-level assertion that #1850 originally introduced.
 """
 import re
 
@@ -20,24 +26,33 @@ def _policy() -> str:
     return _build_csp_enforced_policy("")
 
 
-class TestCSPConnectSrcJsdelivr:
-    """connect-src must allow cdn.jsdelivr.net for xterm source map fetches."""
+def _directive(policy: str, name: str) -> str:
+    match = re.search(rf"{name}\s+([^;]+)", policy)
+    assert match, f"{name} directive must exist in CSP"
+    return match.group(1)
 
-    def test_connect_src_includes_jsdelivr(self):
-        """connect-src must include https://cdn.jsdelivr.net."""
-        policy = _policy()
-        connect_match = re.search(r"connect-src\s+([^;]+);", policy)
-        assert connect_match, "connect-src directive must exist in CSP"
-        assert "https://cdn.jsdelivr.net" in connect_match.group(1), (
-            "connect-src must allow cdn.jsdelivr.net — xterm.js source maps are "
-            "fetched from that origin and the CSP blocks them without this entry"
+
+class TestCSPConnectSrcJsdelivr:
+    """connect-src must no longer name cdn.jsdelivr.net, and must keep 'self'."""
+
+    def test_connect_src_excludes_jsdelivr(self):
+        connect_src = _directive(_policy(), "connect-src")
+        assert "jsdelivr" not in connect_src, (
+            "connect-src names cdn.jsdelivr.net again. Every library the page "
+            "loads is vendored under static/vendor/ — if a lazy import is "
+            "failing, vendor it too rather than reopening egress to a CDN"
         )
 
     def test_connect_src_still_includes_self(self):
-        """connect-src must still include 'self' alongside the new jsdelivr entry."""
+        connect_src = _directive(_policy(), "connect-src")
+        assert "'self'" in connect_src, (
+            "connect-src must retain 'self' — every API call the page makes is "
+            "same-origin"
+        )
+
+    def test_no_directive_in_the_policy_names_a_cdn(self):
+        """script-src and worker-src were the last two holdouts."""
         policy = _policy()
-        connect_match = re.search(r"connect-src\s+([^;]+);", policy)
-        assert connect_match, "connect-src directive must exist in CSP"
-        assert "'self'" in connect_match.group(1), (
-            "connect-src must retain 'self' after adding cdn.jsdelivr.net"
+        assert "jsdelivr" not in policy, (
+            f"the enforced CSP names jsdelivr again: {policy}"
         )

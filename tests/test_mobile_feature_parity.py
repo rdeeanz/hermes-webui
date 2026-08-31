@@ -61,13 +61,37 @@ def test_sheet_is_dismissible_every_expected_way():
 
 
 def test_sheet_traps_and_restores_focus():
-    assert "_trap" in BOOT and "'Tab'" in BOOT, (
-        "focus must be trapped inside an open sheet"
+    """The sheet no longer owns this; HermesA11y.isolate() does.
+
+    The sheet had a private Tab trap. The sidebar drawer and the workspace
+    slide-over — the same kind of overlay — had nothing, so all three now go
+    through one implementation. The property under test is unchanged; only its
+    address moved, and the delegation is asserted so it cannot be quietly
+    replaced by a second copy that drifts.
+    """
+    assert "window.HermesA11y.isolate(el," in BOOT, (
+        "the sheet must delegate focus handling to HermesA11y.isolate()"
     )
-    assert "opener" in BOOT and "opener.focus()" in BOOT, (
+    assert "e.key !== 'Tab'" in BOOT, "focus must be trapped inside an open sheet"
+    assert "opener.focus()" in BOOT, (
         "focus must return to the opener on dismiss, or keyboard and screen-reader "
         "users are dumped at the top of the document"
     )
+    assert "function _trap(" not in BOOT, (
+        "two implementations of one focus contract will drift; isolate() owns it"
+    )
+
+
+def test_sheet_is_modal_to_a_screen_reader_not_only_to_the_tab_key():
+    """A Tab trap does nothing on the device this sheet exists for.
+
+    VoiceOver and TalkBack navigate by swipe. Without aria-modal plus aria-hidden
+    on everything outside, a screen-reader user swipes straight out of an open
+    sheet into the chat behind it and activates a control they cannot see.
+    """
+    assert "'aria-modal', 'true'" in BOOT
+    assert "setAttribute('aria-hidden', 'true')" in BOOT
+    assert "setAttribute('inert', '')" in BOOT
 
 
 def test_sheet_swipe_only_starts_at_the_top_of_the_scroll():

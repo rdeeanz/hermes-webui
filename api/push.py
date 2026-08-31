@@ -482,18 +482,131 @@ def notify(payload: dict, profile: str | None = None,
     return {"sent": sent, "failed": failed, "pruned": pruned}
 
 
-def notify_async(payload: dict, profile: str | None = None) -> None:
+def notify_async(payload: dict, profile: str | None = None) -> threading.Thread | None:
     """Fire-and-forget wrapper for call sites on the agent's critical path.
 
     Delivery involves network I/O to a third-party push service, which can be
     slow or hang. Nothing about a notification justifies blocking a turn, so it
     runs on a daemon thread and its failures stay inside `notify`.
+
+    Returns the thread so a caller that is about to die can give delivery a
+    bounded window (see `notify_crash`). Callers on a live path ignore it — a
+    daemon thread needs no supervision while the process keeps running.
     """
     if not list_subscriptions(profile):
-        return
+        return None
     try:
-        threading.Thread(
+        thread = threading.Thread(
             target=notify, args=(payload, profile), name="push-notify", daemon=True
-        ).start()
+        )
+        thread.start()
+        return thread
     except Exception:
         logger.debug("Could not start push notify thread", exc_info=True)
+        return None
+
+
+# ── Payload builders for the remaining triggers ──────────────────────────────
+# Approvals (api/route_approvals.py) and turn-completion (api/streaming.py) each
+# build their payload inline, because each has exactly one call site. The two
+# below have more than one, so they live here instead of being duplicated:
+# a cron job can finish on either the manual-run path or the in-process
+# scheduler, and a crash can surface from either excepthook.
+
+
+def _bot_name() -> str:
+    """The configured assistant name, for the notification title."""
+    try:
+        from api.config import load_settings
+
+        return str((load_settings() or {}).get("bot_name") or "").strip() or "Hermes"
+    except Exception:
+        return "Hermes"
+
+
+def notify_cron_complete(job: dict, success: bool, error: str | None = None,
+                         profile: str | None = None) -> None:
+    """Push that a scheduled job finished.
+
+    This is the trigger with the strongest claim on push. A cron job runs on a
+    schedule you are not watching — by definition nobody has the page open, so
+    the in-page notification path can never fire for it.
+
+    Never raises: both call sites are in a `finally` that must complete.
+    """
+    try:
+        job = job or {}
+        job_id = str(job.get("id") or "").strip()
+        name = str(job.get("name") or "").strip() or job_id or "Cron job"
+        if success:
+            body = f"Cron job '{name}' finished."
+        else:
+            detail = " ".join(str(error or "").split())[:120]
+            body = f"Cron job '{name}' failed." + (f" {detail}" if detail else "")
+        notify_async({
+            "title": _bot_name(),
+            "body": body,
+            # Keyed on the job, so a job that runs often replaces its own
+            # previous notification instead of stacking one per run — and never
+            # collides with an approval or turn-complete tag.
+            "tag": f"hermes-cron-{job_id or name}",
+            "kind": "cron_failed" if not success else "cron",
+            "url": "./",
+        }, profile)
+    except Exception:
+        logger.debug("Web push (cron complete) failed to dispatch", exc_info=True)
+
+
+# A crashing process can crash repeatedly — an exception raised inside a hot
+# loop would otherwise turn one bug into a notification flood on someone's lock
+# screen. One crash push per cooldown window is enough to make the point.
+_CRASH_PUSH_COOLDOWN_SECONDS = 300
+_last_crash_push = 0.0
+_crash_push_lock = threading.Lock()
+
+
+def notify_crash(where: str, exc_type_name: str, detail: str = "",
+                 profile: str | None = None, wait_seconds: float = 0.0) -> None:
+    """Push that the WebUI hit an uncaught exception.
+
+    `wait_seconds` gives delivery a bounded window before returning. The main
+    thread's excepthook runs as the interpreter is tearing down, and a daemon
+    thread does not survive that — without a short join the notification is
+    started and then killed mid-flight. Bounded, because a hung push service
+    must not be what stops the process from exiting.
+
+    Never raises: an excepthook that raises re-creates the silent-death class of
+    bug this module exists to prevent.
+    """
+    try:
+        global _last_crash_push
+        now = time.time()
+        with _crash_push_lock:
+            if now - _last_crash_push < _CRASH_PUSH_COOLDOWN_SECONDS:
+                return
+            _last_crash_push = now
+
+        summary = " ".join(str(detail or "").split())[:120]
+        body = f"Hermes hit an error in {where} ({exc_type_name})."
+        if summary:
+            body += f" {summary}"
+        thread = notify_async({
+            "title": _bot_name(),
+            "body": body,
+            # Its own tag: a crash must never be collapsed into a turn-complete
+            # or approval notification for some session.
+            "tag": "hermes-crash",
+            "kind": "crash",
+            "url": "./",
+        }, profile)
+        if thread is not None and wait_seconds > 0:
+            thread.join(timeout=wait_seconds)
+    except Exception:
+        logger.debug("Web push (crash) failed to dispatch", exc_info=True)
+
+
+def reset_crash_push_cooldown() -> None:
+    """Clear the crash-push rate limit. For tests."""
+    global _last_crash_push
+    with _crash_push_lock:
+        _last_crash_push = 0.0

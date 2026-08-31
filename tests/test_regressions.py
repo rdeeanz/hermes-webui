@@ -508,11 +508,16 @@ def test_send_uses_session_model_as_authoritative_source(cleanup_test_sessions):
     # PR #1591 (May 2026) added optimistic `upsertActiveSessionForLocalTurn`
     # comments that mention `/api/chat/start` BEFORE the actual POST call, so
     # `src.find("/api/chat/start")` may land on a comment occurrence rather
-    # than the `api('/api/chat/start',{...})` POST. Match the call signature
-    # explicitly to land on the payload block.
-    chat_start_idx = src.find("api('/api/chat/start'")
+    # than the `api('/api/chat/start',{...})` POST.
+    #
+    # The payload literal now sits just ABOVE the POST rather than inline in it —
+    # the offline send queue replays the exact object that was attempted instead
+    # of rebuilding it — so anchor on the literal and read through to the call.
+    payload_idx = src.find("startPayloadForOutbox={")
+    assert payload_idx >= 0, "could not find the /api/chat/start payload literal"
+    chat_start_idx = src.find("api('/api/chat/start'", payload_idx)
     assert chat_start_idx >= 0, "could not find /api/chat/start POST in messages.js"
-    payload_block = src[chat_start_idx:chat_start_idx+400]
+    payload_block = src[payload_idx:chat_start_idx + 200]
     assert "S.session.model" in payload_block, \
         "send() must use S.session.model in the chat/start payload"
 

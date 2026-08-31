@@ -5652,6 +5652,15 @@ async function _runRenderSessionListRefresh(opts, _gen){
     if(!_sessionListHasLoadedOnce){
       sessionRequestOpts.timeoutMs=_SESSION_LIST_BOOT_TIMEOUT_MS;
       sessionRequestOpts.retryTimeouts=true;
+      // Cold boot only: ask the service worker for stale-while-revalidate, so
+      // the sidebar paints from its cached copy immediately instead of showing
+      // a skeleton for a round-trip (and shows something at all when offline).
+      // The header is what opts in — sw.js keeps every other /api/sessions
+      // request network-first, which is why a profile switch cannot flash the
+      // previous profile's rows. When the revalidation disagrees with what was
+      // served, sw.js posts 'hermes:sessions-updated' and the listener below
+      // re-renders; that comparison is also what stops it looping.
+      sessionRequestOpts.headers={'Content-Type':'application/json','X-Hermes-Cache':'swr'};
     }
     const {sessData, projData}=await _loadSidebarSessionListPayload(sessionListQS, sessionRequestOpts);
     // Discard stale response — a newer renderSessionList() call superseded us.

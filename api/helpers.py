@@ -83,34 +83,35 @@ _CSP_EXTRA_FRAME_RE = _re.compile(
 )
 _CSP_HEADER_NAME = 'Content-Security-Policy'
 
-# Remaining third-party script origins, narrowed to exact paths.
+# No CDN script origin remains in this policy.
 #
 # Prism.js and xterm.js used to load from the bare cdn.jsdelivr.net origin, which
-# meant ANY script on that CDN was executable in an authenticated page. They are
-# now vendored under static/vendor, so the only remaining CDN consumers are the
-# two heavyweight libraries that ui.js imports lazily and on demand:
+# meant ANY script on that CDN was executable in an authenticated page. Narrowing
+# that to two path-scoped grants (pdfjs-dist, mermaid) was an intermediate step;
+# both libraries are vendored under static/vendor/ now, so jsdelivr is gone from
+# script-src, worker-src and connect-src entirely. What this buys:
 #
-#   PDF.js  — workspace PDF preview  (ui.js: _pdfSrc / _pdfWorker)
-#   Mermaid — diagram rendering in assistant messages
+#   - a genuinely air-gapped deployment: no outbound egress is needed for any
+#     feature, including the two that were still lazy CDN consumers,
+#   - no path-prefix matching to reason about (CSP path matching is bypassed by
+#     cross-origin redirects, so a path-scoped grant was never as tight as it
+#     looked),
+#   - one fewer third-party TLS handshake the first time a PDF or a diagram is
+#     opened on a mobile connection.
 #
-# CSP source expressions honour a path prefix, so scoping to these two directories
-# keeps both features working while removing the blanket grant. (Path matching is
-# bypassed by cross-origin redirects; that is acceptable here because the origin
-# itself was already trusted before this change — this narrows the grant, it does
-# not weaken anything.) Vendoring these two as well would let jsdelivr be dropped
-# from the policy entirely; they are ~4 MB combined, so that is a separate call.
-_CSP_JSDELIVR_LAZY_LIBS = (
-    "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/ "
-    "https://cdn.jsdelivr.net/npm/mermaid@10.9.3/"
-)
+# The remaining non-'self' script origin is Cloudflare Insights, which only
+# applies behind Cloudflare Access. blob: stays because ui.js bootstraps PDF.js
+# through a blob module script (it sets GlobalWorkerOptions.workerSrc before the
+# library initializes); the worker itself is now same-origin.
 _CSP_SHARED_POLICY_TEMPLATE = (
     "default-src 'self' https://*.cloudflareaccess.com; "
     "object-src 'none'; "
     "frame-ancestors 'none'; "
-    f"script-src 'self' 'unsafe-inline' {_CSP_JSDELIVR_LAZY_LIBS} "
+    "script-src 'self' 'unsafe-inline' "
     "https://static.cloudflareinsights.com blob:; "
-    # pdf.worker.min.mjs is instantiated as a worker from the same CDN path.
-    f"worker-src blob: 'self' {_CSP_JSDELIVR_LAZY_LIBS}; "
+    # PDF.js instantiates pdf.worker.min.mjs from static/vendor ('self'); blob:
+    # covers the library's own blob-worker fallback path.
+    "worker-src blob: 'self'; "
     # No CDN entry needed at all now: the only third-party stylesheet was the
     # Prism theme, which is vendored.
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
@@ -180,10 +181,12 @@ def _csp_extra_frame_src() -> str:
 
 def _csp_connect_src(extra_connect_src: str = "") -> str:
     # xterm's bundled source map used to be fetched from the CDN (#1850), which is
-    # why the whole origin was allowed here. The vendored copy has its
-    # sourceMappingURL stripped, so only the lazily-imported PDF.js / Mermaid
-    # modules still need network access, and only under their own paths.
-    return f"{_CSP_CONNECT_BASE} {_CSP_JSDELIVR_LAZY_LIBS}{extra_connect_src}"
+    # why the whole origin was allowed here. Every library the page loads is
+    # vendored now — including the two that were still lazily imported from
+    # jsdelivr — so no CDN origin is needed for connect either. Only 'self', the
+    # local-dev loopback origins, and any operator-supplied
+    # HERMES_WEBUI_CSP_CONNECT_EXTRA entries remain.
+    return f"{_CSP_CONNECT_BASE}{extra_connect_src}"
 
 
 def _csp_frame_src(extra_frame_src: str = "") -> str:
@@ -308,6 +311,21 @@ def j(handler, payload, status: int=200, extra_headers: dict=None, *, pretty: bo
     _safe_write(handler, body)
 
 
+# Content types worth compressing in t(). Deliberately an allowlist rather than
+# "anything not an image": t() also serves the odd binary-ish blob, and gzipping
+# already-compressed bytes spends CPU to add framing.
+_T_COMPRESSIBLE_PREFIXES = (
+    'text/html',
+    'text/plain',
+    'text/css',
+    'text/xml',
+    'application/javascript',
+    'application/json',
+    'application/xml',
+    'image/svg+xml',
+)
+
+
 def t(
     handler,
     payload,
@@ -319,6 +337,32 @@ def t(
     body = payload if isinstance(payload, bytes) else str(payload).encode('utf-8')
     handler.send_response(status)
     handler.send_header('Content-Type', content_type)
+
+    # Gzip large text responses when the client accepts it — the same treatment
+    # j() has always given JSON, and which t() simply never got.
+    #
+    # This mattered far more than it looks. The app shell (`/`, `/index.html`,
+    # `/session/<id>`) is served through here, and static/index.html is ~226 KiB
+    # of markup. Every cold navigation shipped all of it uncompressed while every
+    # asset it references was gzipped by _serve_static — so the single largest
+    # item on the critical path was the one thing nobody had compressed.
+    # Measured: 231,085 -> 44,331 bytes, and Lighthouse mobile flagged it as
+    # ~900 ms of the load. The frontend payload budget could not see it either,
+    # because that gate measures the assets index.html REFERENCES, never the
+    # document itself.
+    #
+    # Level 6 matches _serve_static. Level 9 buys 0.2 KiB for 40% more CPU;
+    # level 4 costs 2 KiB to save 1.3 ms. Neither trade is worth taking.
+    if (
+        _accepts_gzip(handler)
+        and len(body) > 1024
+        and str(content_type).split(';', 1)[0].strip().lower().startswith(_T_COMPRESSIBLE_PREFIXES)
+    ):
+        import gzip
+        body = gzip.compress(body, compresslevel=6)
+        handler.send_header('Content-Encoding', 'gzip')
+        handler.send_header('Vary', 'Accept-Encoding')
+
     handler.send_header('Content-Length', str(len(body)))
     handler.send_header('Cache-Control', 'no-store')
     _security_headers(handler)

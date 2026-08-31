@@ -86,8 +86,14 @@ def test_preference_fields_use_schedule_autosave_not_mark_dirty():
         # We use a context window around the dom_id to find the listener.
         idx = panel.find(f"$('{dom_id}')")
         assert idx != -1, f"{dom_id} not loaded in loadSettingsPanel"
-        # Window of next ~600 chars covers the .addEventListener call
-        window = panel[idx:idx + 600]
+        # The field's own block: from where it is looked up to where the NEXT
+        # settings field is. Previously this was a fixed 600-character window,
+        # which measured how verbose a field's setup happened to be rather than
+        # how it was wired — adding a few lines to one field's block pushed its
+        # own addEventListener out of view and failed a test about a different
+        # property entirely.
+        nxt = panel.find("$('settings", idx + 1)
+        window = panel[idx:nxt if nxt != -1 else len(panel)]
         assert "addEventListener" in window, f"{dom_id} has no addEventListener"
         assert "_schedulePreferencesAutosave" in window, \
             f"{dom_id} listener should call _schedulePreferencesAutosave (Phase 2 #1003)"

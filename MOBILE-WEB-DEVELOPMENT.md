@@ -12,10 +12,26 @@
 > diverifikasi langsung ditandai eksplisit dengan **[belum terverifikasi]**.
 >
 > Tanggal analisa: 2026-08-19 · Commit dasar analisa: `fc1dc3a`
+> **Re-audit: 2026-08-31 · Commit: `f1a60e46`** — pengukuran ulang seluruh
+> permukaan mobile di HEAD, lihat [§0.8](#08-re-audit-2026-08-31--pengukuran-ulang-di-f1a60e46).
 >
 > **STATUS: Fase 1, 2, dan 3 SELESAI.** Lihat
 > [§0 Status Implementasi](#0-status-implementasi) untuk ringkasan apa yang sudah
 > dikerjakan, angka sebelum/sesudah yang terukur, dan apa yang masih tersisa.
+> **Sisa kerja tidak lagi diurut per sprint** — [§12](#12-backlog-terurut-prioritas)
+> adalah satu daftar global terurut prioritas (P0 → P4), dan urutannya berbeda
+> dari §8 karena alasan yang ditulis di sana.
+> **P0 sudah dikerjakan** ([§0.9](#09-p0-terlaksana-2026-08-31)): dokumentasi
+> HTTPS ada di [`docs/reverse-proxy.md`](docs/reverse-proxy.md), dan pemicu push
+> cron + crash sudah terpasang. **P1 selesai sebagian**
+> ([§0.10](#010-p1-terlaksana-sebagian-2026-08-31)) — dua item dihentikan dengan
+> alasan terukur. **P2 selesai seluruhnya**
+> ([§0.11](#011-p2-terlaksana-2026-08-31)): service worker, audit a11y, dan
+> vendoring PDF.js + Mermaid. **P4.2 selesai** dan **gerbang P4.1 akhirnya
+> diukur** ([§0.12](#012-p4-terlaksana--dan-gerbang-p41-akhirnya-diukur-2026-08-31))
+> — Lighthouse mobile **71 → 76**, terutama karena shell HTML ternyata dikirim
+> **tanpa kompresi** (231 KB → 44 KB). Gerbang P4.1 terbuka (76 < 85); datanya di
+> §0.12.3, keputusannya milik Anda.
 > Bagian §5 dan §6 sengaja **tidak** ditulis ulang — keduanya adalah catatan
 > temuan awal, dan menghapusnya akan menghilangkan alasan mengapa perbaikannya
 > dibuat. Setiap temuan yang sudah diperbaiki diberi penanda di tempatnya.
@@ -25,6 +41,11 @@
 ## Daftar Isi
 
 0. [Status Implementasi](#0-status-implementasi) ← **mulai di sini**
+   · [0.8 Re-audit 2026-08-31](#08-re-audit-2026-08-31--pengukuran-ulang-di-f1a60e46)
+   · [0.9 P0 terlaksana](#09-p0-terlaksana-2026-08-31)
+   · [0.10 P1 terlaksana sebagian](#010-p1-terlaksana-sebagian-2026-08-31)
+   · [0.11 P2 terlaksana](#011-p2-terlaksana-2026-08-31)
+   · [0.12 P4 terlaksana + gerbang P4.1 diukur](#012-p4-terlaksana--dan-gerbang-p41-akhirnya-diukur-2026-08-31)
 1. [Ringkasan Eksekutif — Jawaban Jujur](#1-ringkasan-eksekutif--jawaban-jujur)
 2. [Codebase Ini Apa?](#2-codebase-ini-apa)
 3. [Tech Stack](#3-tech-stack)
@@ -36,7 +57,7 @@
 9. [Blueprint Deployment VPS](#9-blueprint-deployment-vps)
 10. [Strategi Testing](#10-strategi-testing)
 11. [Risiko, Trade-off, dan Non-Goals](#11-risiko-trade-off-dan-non-goals)
-12. [Checklist Ringkas](#12-checklist-ringkas)
+12. [Backlog Terurut Prioritas](#12-backlog-terurut-prioritas) ← **apa yang dikerjakan berikutnya**
 
 ---
 
@@ -260,6 +281,12 @@ playwright yang memang sudah ada di sandbox ini).
 
 ### 0.6 Sisa kerja setelah Fase 1–2
 
+> **Catatan re-audit (2026-08-31):** bagian ini ditulis sebelum Fase 3 mendarat.
+> Fase 3 kini **selesai** ([§0.7](#07-fase-3--web-push-selesai)), dan seluruh sisa
+> kerja — termasuk tiga item di bawah — sudah diurut ulang secara global di
+> [§12](#12-backlog-terurut-prioritas). Gunakan §12 sebagai daftar kerja; bagian
+> ini dipertahankan sebagai catatan waktu itu.
+
 Fase 3–5 belum disentuh dan tetap seperti tertulis di §8. Ditambah tiga item
 baru yang muncul dari pekerjaan ini:
 
@@ -384,11 +411,1077 @@ Yang tersisa untuk Anda uji setelah deploy: buka Settings → aktifkan toggle �
 
 #### Sisa kerja di Fase 3
 
+> **✅ SELESAI di P0.2 (2026-08-31).** Keduanya kini terpasang — cron di **dua**
+> jalur penyelesaian (manual dan scheduler in-process), crash di **kedua**
+> excepthook. Lihat [§0.9](#09-p0-terlaksana-2026-08-31). Paragraf di bawah
+> dipertahankan sebagai catatan alasan keduanya ditunda saat itu.
+
 Pemicu cron-selesai dan crash belum dipasang. Keduanya mudah ditambahkan sekarang
 karena infrastrukturnya sudah ada (`push.notify_async()` satu panggilan), tapi
 keduanya bukan yang membuat agent menggantung — approval-lah yang begitu, dan itu
 sudah terpasang.
 
+---
+
+---
+
+### 0.8 Re-audit 2026-08-31 — pengukuran ulang di `f1a60e46`
+
+Analisa asli ditulis di commit `fc1dc3a`. Repo sudah bergerak jauh sejak itu
+(locale ke-16 masuk, skin bertambah dari 11 jadi 20, `ui.js`/`boot.js` tumbuh).
+Bagian ini adalah **pengukuran ulang permukaan mobile di HEAD sekarang**, bukan
+pembacaan ulang §0.1–§0.7.
+
+**Batas kejujuran, dulu.** Playwright/Chromium **tidak tersedia** di environment
+re-audit ini (`import playwright` → `ModuleNotFoundError`). Konsekuensinya harus
+eksplisit:
+
+- Semua angka **byte, jumlah, dan isi file** di bawah ini **terukur langsung** di
+  working tree — reproducible lewat Lampiran B.
+- Semua klaim **layout runtime** dari §0.2 (panel terbuka di 768px, nol overflow
+  di 9 viewport, target sentuh 44px) **tidak diverifikasi ulang** di commit ini.
+  Gerbangnya masih terpasang — `.github/workflows/browser-smoke.yml` menjalankan
+  `tests/browser_responsive.py` pada setiap PR non-docs — jadi selama CI hijau
+  klaim itu masih berlaku. Tapi saya tidak menjalankannya sendiri di sini, dan
+  tidak akan berpura-pura sudah.
+
+#### Yang masih berdiri
+
+| Klaim dari §0 | Status di `f1a60e46` | Bukti terukur sekarang |
+|---|---|---|
+| 0 aset runtime dari CDN saat page load | ✅ Masih | 5 `<script src>` + 4 `<link rel=stylesheet>` di `index.html`, **semuanya** `static/…` |
+| CSP tidak lagi memberi grant seluruh origin jsdelivr | ✅ **Dilampaui** (P2.3) | Kedua path sisa (`pdfjs-dist@4.9.155/`, `mermaid@10.9.3/`) sudah divendor. **Nol origin CDN** di `script-src`, `worker-src`, `connect-src` — lihat [§0.11](#011-p2-terlaksana-2026-08-31) |
+| Kontrak breakpoint hidup, tidak melar | ✅ Masih | `--bp-phone:640px` / `--bp-tablet:1024px` (`style.css:36-37`) ↔ `BP.PHONE`/`BP.TABLET`; `tests/test_breakpoint_contract.py` masih menolak breakpoint layout ketiga lewat allowlist kosmetik eksplisit |
+| Gerbang responsif berjalan di CI | ✅ Masih | `browser-smoke.yml` → step **"Run responsive layout gate"**, 9 viewport |
+| Web Push terpasang tanpa dependensi baru | ✅ Masih | `api/push.py` (19,6 KB); handler `push` + `pushsubscriptionchange` + `notificationclick` di `sw.js` (kini 520 baris setelah P2.1) |
+| Locale parsial dikontrak, bukan dilubangi | ✅ Masih | `tests/locale_contract.py` → `PARTIAL_LOCALES = {"id": …}`, satu entri, beralasan |
+
+Tidak ada regresi arsitektural. Yang bergeser adalah **angkanya**.
+
+#### Temuan baru 1 — payload tumbuh secara struktural, dan tidak ada gerbang yang menyadarinya
+
+Ini temuan terpenting dari re-audit.
+
+Satu catatan metodologi lebih dulu: angka "5.527 KB mentah / 1.415 KB gzip" di
+§0.2 **tidak bisa dibandingkan langsung** dengan angka di bawah — basis
+perhitungannya (file mana yang dihitung, KB=1000 atau 1024) tidak tercatat di
+dokumen lama, jadi selisihnya akan mengukur metode, bukan kode. Yang **bisa**
+dibandingkan adalah per-file: `i18n.js` naik dari 477 → **485,3 KiB gzip**
+(locale ke-16 masuk), `style.css` dari 505 → **515,5 KiB mentah** (skin 11 → 20).
+Angka di bawah adalah basis baru yang akan dipakai anggaran CI di P1.0 —
+ditulis lengkap agar tidak terulang.
+
+Rincian jalur kritis **cold load** (gzip level 6, persis seperti yang dikirim
+`_serve_static`; satuan KiB = 1024 byte):
+
+| Bagian | Raw | Gzip |
+|---|---:|---:|
+| `index.html` | 221,0 | **42,0** |
+| JS + CSS aplikasi (16 file, semua `defer`) | 5.323,0 | **1.377,8** |
+| Vendor eager (Prism core+autoloader, **xterm ×3 + CSS**, KaTeX CSS, tema Prism) | 323,2 | **77,7** |
+| **Total cold** | **5.867,2** | **1.497,5** |
+
+Kontributor terbesar, gzip:
+
+| File | Gzip (KiB) | % jalur kritis |
+|---|---:|---:|
+| `i18n.js` | **485,3** | 32,4% |
+| `ui.js` | 273,7 | 18,3% |
+| `panels.js` | 154,1 | 10,3% |
+| `sessions.js` | 113,2 | 7,6% |
+| `messages.js` | 111,4 | 7,4% |
+| `style.css` | 99,0 | 6,6% |
+| `vendor/xterm/*` (js+css) | **68,2** | 4,6% |
+| `boot.js` | 52,3 | 3,5% |
+| `index.html` | 42,0 | 2,8% |
+
+Tiga hal yang tidak terlihat di analisa awal:
+
+1. **`i18n.js` sekarang 16 locale.** `vi` masuk setelah analisa. Bundle-nya naik
+   dari 477 → **485,3 KiB gzip**. Satu-satunya file yang pertumbuhannya
+   struktural: setiap bahasa baru menambah ~30 KiB gzip ke **setiap** cold load,
+   untuk 15 bahasa yang tidak dibaca pengguna itu.
+
+2. **xterm dimuat eager di setiap page load — 68,2 KiB gzip.** Analisa awal
+   menyebut "~300 KB xterm" sebagai angka mentah dan menaruhnya di Fase 4.3
+   sebagai item ketiga. Angka gzip-nya baru terukur sekarang, dan konteksnya
+   berubah: `index.html:113-115` memuat `xterm.js` + 2 addon + `xterm.css`
+   dengan `defer` di `<head>` — artinya **setiap pengguna HP membayar 68,2 KiB
+   untuk terminal embedded yang mayoritas tidak pernah dibuka di HP.**
+
+3. **Tidak ada anggaran performa di CI.** `tests/` punya 1.398 file dan
+   beberapa test "budget", tapi semuanya budget *runtime/query*
+   (`test_5021_boot_model_redirect_budget.py`, `test_issue3928_models_budget_fallback.py`,
+   …) — **nol** yang menjaga byte frontend. Tidak ada yang akan gagal kalau
+   locale ke-17 atau modul 200 KB berikutnya masuk. Inilah kenapa urutan Fase 4
+   di §12 saya balik: gerbangnya duluan, splitnya kemudian.
+
+#### Temuan baru 2 — target `< 450 KB` di Fase 4.6 tidak tercapai oleh rencana Fase 4 sendiri
+
+Saya hitung ulang proyeksi keempat item Fase 4 dengan angka gzip terukur:
+
+| Langkah | Hemat (KiB gzip) | Sisa cold |
+|---|---:|---:|
+| Baseline sekarang | — | **1.497,5** |
+| 4.1 Pecah `i18n.js` (muat `en` + locale aktif saja) | **−424,6** | 1.072,9 |
+| 4.2 Lazy `panels.js` | −154,1 | 918,8 |
+| 4.3 Lazy `terminal.js` + xterm | −75,1 | 843,7 |
+| 4.4 Pecah CSS core ↔ skin | **−18,4** | **825,3** |
+
+**Kesimpulannya: rencana Fase 4 sebagaimana tertulis mendarat di ~825 KiB, bukan
+< 450 KiB.** Dua koreksi yang mengikuti:
+
+- **4.4 jauh lebih kecil dari yang diduga.** Diukur: 97.429 dari 525.290 byte
+  `style.css` berada di dalam selector `[data-skin=…]` — **18,5%**, atau ~18 KiB
+  gzip. Itu item **terkecil** dari empat, bukan sebanding dengan yang lain.
+  Ia turun peringkat di §12 karena itu.
+- **Untuk benar-benar menembus 450 KiB perlu item kelima yang tidak ada di
+  rencana:** memecah `ui.js` (273,7) + `sessions.js` (113,2) + `messages.js`
+  (111,4) = 498,3 KiB yang dimuat penuh sebelum pesan pertama tampil. Itu
+  refactor modul sungguhan, bukan pemisahan file, dan risikonya jauh di atas
+  empat item lainnya. Saya menuliskannya sebagai **P4** yang eksplisit — dengan
+  target yang jujur — alih-alih membiarkan angka 450 berdiri tanpa jalan menuju
+  ke sana.
+
+Target Fase 4 direvisi di §12: **≤ 850 KiB gzip cold** untuk P1, dan 450 KiB
+dipindah ke P4 sebagai target yang butuh pekerjaan terpisah.
+
+#### Temuan baru 3 — locale `id` jauh lebih tipis daripada yang tersirat di §0.4
+
+§0.4 menyebut "±150 key inti" dan mencentangnya SELESAI. Terukur sekarang:
+
+| Locale | Perkiraan key | vs `en` |
+|---|---:|---:|
+| `en` | 1.713 | 100% |
+| `vi` | 1.827 | — |
+| `cs` / `fr` / `pl` | 1.735 / 1.732 / 1.722 | ~100% |
+| `pt` (terendah dari yang lengkap) | 1.524 | 89% |
+| **`id`** | **163** | **9,5%** |
+
+Angka itu tidak membatalkan keputusan di §0.4 — menolak menebak label Indonesia
+untuk alur destruktif tetap benar, dan `t()` memang jatuh ke `en` per-key. Yang
+perlu dikoreksi adalah **framing-nya**: `id` bukan "locale yang selesai dengan
+sedikit ekor Inggris", ia **locale 9,5%** di mana pengguna Indonesia akan melihat
+Inggris di hampir semua tempat kecuali layar pertama, composer, navigasi, sesi,
+login, dan sheet mobile. Itu tetap keputusan yang sah untuk dikirim — tapi
+"promosikan `id`" adalah pekerjaan ~1.550 key, bukan sisa-sisa. Diprioritaskan
+di §12 sesuai ukuran sebenarnya.
+
+#### Temuan baru 4 — HTTPS masih tidak terdokumentasi, dan itu sekarang memblokir fitur yang sudah dibayar
+
+Ini yang mengubah urutan prioritas paling besar.
+
+Saat §6.9 ditulis, "tidak ada panduan reverse proxy / TLS" berstatus 🟡 — tidak
+nyaman, tapi bisa disiasati dengan SSH tunnel atau Tailscale. **Setelah Fase 3
+mendarat, statusnya naik jadi pemblokir.** Web Push **mensyaratkan secure
+context**: tanpa HTTPS, `PushManager.subscribe()` tidak akan pernah berhasil.
+Artinya seluruh `api/push.py` — RFC 8291 + RFC 8292 yang diimplementasikan dari
+nol, diverifikasi terhadap vektor uji resmi — **mati di setiap deployment yang
+tidak punya TLS**. Begitu juga "Add to Home Screen" untuk iOS, yang merupakan
+**satu-satunya** jalan push di iOS.
+
+Statusnya di repo hari ini, terukur:
+
+- `docs/remote-access.md` — **75 baris**, hanya SSH tunnel + Tailscale + laporan
+  ARM64 komunitas. Nol nginx, nol Caddy, nol TLS, nol certbot.
+- `README.md:447` — eksplisit mengarahkan ke SSH tunnel / Tailscale.
+- `README.md:443` (modul NixOS) — eksplisit **menyerahkan** reverse proxy dan
+  TLS ke "surrounding deployment module".
+- `grep -rl proxy_buffering` di seluruh repo → **satu-satunya hasil adalah
+  dokumen ini** (§0.5 Fase 0). Konfigurasi nginx yang benar untuk SSE ada, tapi
+  hidup di roadmap, bukan di `docs/`.
+
+Dan `proxy_buffering off` bukan detail kosmetik: tanpa itu nginx menahan stream
+SSE dan aplikasi tampak menggantung — mode kegagalan pertama yang akan ditemui
+setiap orang yang memasang reverse proxy sendiri.
+
+**Karena itu "tulis `docs/reverse-proxy.md`" naik ke P0.** Ia satu-satunya item
+di seluruh backlog yang (a) tidak menyentuh satu baris kode aplikasi, (b)
+mengaktifkan fitur yang sudah selesai dibangun dan sekarang menganggur, dan (c)
+merupakan prasyarat keras bagi separuh isi Fase 5.
+
+#### Ringkasan re-audit
+
+| | |
+|---|---|
+| Regresi arsitektural | **Nol** — semua kontrak Fase 1–3 masih ditegakkan test |
+| Bug mobile terbuka di `BUGS.md` | **Nol** |
+| Yang memburuk | `i18n.js` 477 → 485,3 KiB gzip (locale 15 → 16), skin 11 → 20, `ui.js`/`boot.js` tumbuh — semuanya tanpa satu pun gerbang byte |
+| Yang salah di dokumen lama | Target Fase 4 `< 450 KB` tidak terjangkau rencananya sendiri; hemat CSS skin dilebih-lebihkan; `id` 9,5% bukan "selesai"; §1 masih mengatakan `id` belum ada |
+| Prioritas yang berubah | **Dokumentasi HTTPS naik ke P0** (memblokir Web Push yang sudah jadi); **anggaran payload naik ke depan Fase 4**; **split CSS turun ke belakang** |
+
+---
+
+---
+
+### 0.9 P0 terlaksana (2026-08-31)
+
+P0.1 dan P0.2 dari [§12](#12-backlog-terurut-prioritas) dikerjakan. Bagian ini
+mencatat apa yang berubah, apa yang **gagal verifikasi** saat dikerjakan, dan
+apa yang tidak bisa saya buktikan.
+
+#### Yang berubah
+
+| Berkas | Perubahan |
+|---|---|
+| `docs/reverse-proxy.md` | **Baru** — nginx + Caddy + TLS, ketiga variabel `TRUST_FORWARDED_*`, subpath mount, diagnosis SSE, alur Web Push |
+| `docs/remote-access.md` | Peringatan secure-context di atas + catatan `tailscale cert`, keduanya menaut ke dokumen baru |
+| `README.md` | Bagian "Public hostname with TLS"; catatan modul NixOS kini punya tujuan rujukan |
+| `MOBILE-WEB-DEVELOPMENT.md` | §0.5 **dipindahkan** ke `docs/`, bukan disalin |
+| `api/push.py` | `notify_cron_complete()`, `notify_crash()`, `reset_crash_push_cooldown()`; `notify_async()` kini mengembalikan Thread |
+| `api/routes.py` | Pemicu cron di jalur manual `/api/crons/run` |
+| `api/profiles.py` | Pemicu cron di jalur scheduler in-process |
+| `api/crash_visibility.py` | `_push_crash()` + panggilan dari kedua excepthook |
+| `static/sw.js` | `requireInteraction` diperluas ke `crash` dan `cron_failed` |
+| `tests/test_web_push.py` | 12 test baru; 1 test lama diperbarui mengikuti kontrak baru |
+
+#### Tiga klaim yang gagal verifikasi saat dokumen ditulis
+
+Saya menulis dokumen deployment lebih dulu lalu memeriksa setiap klaimnya
+terhadap kode. Tiga di antaranya salah, dan semuanya jenis yang akan membuat
+operator membuang waktu:
+
+1. **"Set `HERMES_WEBUI_SESSION_TTL` supaya HP tidak logout."** Salah — ia
+   **sudah** default 30 hari (`api/auth.py`: `SESSION_TTL = 86400 * 30`).
+   Menyuruh orang menyetel ulang nilai default adalah cargo cult. Dikoreksi
+   jadi penjelasan kapan Anda justru ingin mengubahnya.
+2. **Nama cookie `hermes_webui_session`.** Itu nilai *contoh* di `.env.example`;
+   default sebenarnya `hermes_session` (`api/auth.py:61`). Perintah `curl`
+   diagnostik dengan nama cookie salah akan gagal autentikasi dan terlihat
+   seperti masalah buffering — persis hal yang sedang didiagnosis.
+3. **`event: keepalive`.** Server mengirim baris **komentar** SSE
+   (`: keepalive`), bukan event bernama. Pembaca yang menunggu `event:` akan
+   menyimpulkan streaming rusak padahal sehat.
+
+*Semua contoh `bash`/`python` di Lampiran B juga dijalankan verbatim; keluarannya
+cocok dengan angka di §0.8.*
+
+#### Cakupan pemicu cron — rencananya kurang satu
+
+Rencana menyebut satu lokasi (`api/background.py`). Diperiksa: modul itu soal
+background **task**, bukan cron. Cron sebenarnya selesai di **dua** tempat, dan
+keduanya dipasangi pemicu:
+
+| Jalur | Berkas | Kapan |
+|---|---|---|
+| Manual "Run now" | `api/routes.py` (`finally` dari `_run_manual_cron_job`) | Pengguna menekan tombol |
+| Scheduler in-process | `api/profiles.py` (`install_cron_scheduler_profile_isolation`) | Job terjadwal, **tidak ada halaman terbuka** |
+
+Jalur kedua adalah alasan fitur ini ada: job terjadwal menyala saat tidak ada
+yang menonton, jadi jalur notifikasi in-page tidak akan pernah bisa memicunya.
+
+#### Yang TIDAK saya verifikasi
+
+**Pengiriman push cron/crash ke perangkat sungguhan belum diuji** — batasan yang
+sama persis dengan §0.7: sandbox ini memblokir egress ke FCM/APNs/Mozilla dan
+tidak ada HP di sini. Yang **sudah** terverifikasi: bentuk payload, isolasi tag,
+pembatasan laju, verdict default-gagal, bahwa tidak satu pun jalur bisa
+melempar exception, dan bahwa keduanya memakai `notify_async` (bukan `notify`)
+sehingga tidak pernah memblokir agent.
+
+**Konfigurasi nginx/Caddy tidak dijalankan terhadap proxy sungguhan.** Ia
+diturunkan dari membaca `api/auth.py`, `api/routes.py` (gerbang CSRF),
+`api/passkeys.py`, dan `static/index.html` (`<base href>`), bukan dari
+menjalankan nginx. Direktifnya standar dan alasannya terikat ke kode yang
+dikutip, tapi Anda-lah yang akan menjalankannya pertama kali.
+
+#### Test
+
+`tests/test_web_push.py`: **42 lulus** (dari 30). Suite penuh: **14.954 lulus,
+310 dilewati, 1 gagal** — satu-satunya kegagalan adalah
+`test_5774b_atomic_config_writes.py::test_atomic_write_preserves_existing_permissions`,
+yang menegakkan bit setgid `0o2664` bertahan melewati penulisan atomik. Ia
+menguji `api/paths.py`, berkas yang **tidak saya sentuh**, dan gagal karena
+filesystem sementara macOS membuang bit setgid. Tidak berhubungan dengan
+perubahan ini dan sudah ada sebelumnya.
+
+Ruff pada berkas yang saya ubah: nol temuan baru (`api/push.py` dan
+`api/crash_visibility.py` bersih sepenuhnya; temuan lain di `routes.py` /
+`profiles.py` / `test_web_push.py` semuanya di baris yang tidak saya sentuh dan
+sudah ada di `HEAD`).
+
+---
+
+---
+
+### 0.10 P1 terlaksana sebagian (2026-08-31)
+
+**Cold path: 1.497,5 → 1.022,1 KiB gzip (−475,4 KiB, −31,7%).** P1.0, P1.1, dan
+P1.3 selesai. **P1.2 dan P1.4 dihentikan sebelum dikerjakan** karena pengukuran
+menunjukkan keduanya bukan pekerjaan yang dijelaskan rencana — rinciannya di
+bawah, dan keputusannya milik Anda.
+
+| Langkah | Rencana | Hasil | Cold path |
+|---|---|---|---|
+| — | baseline §0.8 | — | 1.497,5 KiB |
+| **P1.0** Anggaran payload di CI | 0,5 hr | ✅ `tests/test_frontend_payload_budget.py` | — |
+| **P1.1** Pecah `i18n.js` | −424,6 KiB | ✅ **−408,4 KiB** | 1.089,1 KiB |
+| **P1.3** Lazy xterm | −75,1 KiB | ✅ **−67,0 KiB** | **1.022,1 KiB** |
+| **P1.2** Lazy `panels.js` | −154,1 KiB | ⛔ **terhenti** — lihat di bawah | — |
+| **P1.4** Pecah CSS skin | −18,4 KiB | ⛔ **terhenti** — lihat di bawah | — |
+
+Target P1 yang direvisi (≤ 850 KiB) **tidak tercapai** — ia mengandaikan P1.2
+mendarat. Tanpa P1.2, lantai dari rencana ini adalah ~1.004 KiB.
+
+#### P1.0 — anggaran itu bekerja, dan dibuktikan bekerja
+
+`tests/test_frontend_payload_budget.py` menurunkan daftar aset **dengan
+mem-parsing `index.html`**, bukan dari daftar hardcoded. Daftar hardcoded persis
+kegagalan yang ingin dicegah: seseorang menambah `<script src>`, daftar tidak
+tahu, dan gerbangnya diam-diam berhenti menggambarkan halaman yang sebenarnya.
+
+Gerbang yang tidak bisa gagal tidak berguna, jadi keduanya diuji langsung:
+
+- Menambah ~66 KiB ke `outline.js` → gagal, pesannya menyebut
+  `static/outline.js 71.1 KiB` dan `over by: 36.928 bytes`.
+- Menambah `<script src="static/newmodule.js">` baru ke `index.html` → gagal,
+  file baru itu **muncul di laporan** tanpa disebut di mana pun.
+
+Ia juga menangkap konsekuensi P1.1 tanpa diminta: begitu `i18n.js` tidak lagi
+dimuat, `test_every_budgeted_file_is_actually_on_the_cold_path` gagal dan
+menyuruh menghapus anggaran per-filenya. Itu memang perilaku yang dirancang —
+anggaran per-file yang tertinggal akan terus membatasi file yang sudah tidak
+membebani cold start.
+
+#### P1.1 — pecah `i18n.js`, dan mengapa sumbernya tidak dipindahkan
+
+**Rencana menyebut risikonya terkecil. Itu benar untuk runtime, dan salah untuk
+test:** **168 berkas test membaca `static/i18n.js` lewat path.** Memecah berkas
+yang diauthor akan merusak semuanya.
+
+Karena itu `static/i18n.js` **tetap sumber kebenaran yang disunting penerjemah**.
+`scripts/split_i18n.py` menghasilkan `static/i18n/` darinya:
+
+| Berkas | Isi | Gzip |
+|---|---|---|
+| `i18n/core.js` | runtime + `en` (rantai fallback) + manifest 16 bahasa | 38,8 KiB |
+| `i18n/<kode>.js` × 15 | satu bahasa | 2,9–37,2 KiB |
+
+Sebelumnya setiap pembaca mengunduh 485,3 KiB untuk 16 bahasa. Sekarang pembaca
+Inggris membayar 38,8 KiB; pembaca Rusia (bundel terbesar) 76,0 KiB.
+
+**Drift dijaga, bukan diharapkan.** Berkas hasil generate ikut di-commit — repo
+ini tidak punya build step, jadi itu satu-satunya cara ia sampai ke deployment.
+`tests/test_i18n_split.py::test_generated_bundles_match_the_source` menjalankan
+`--check` dan gagal kalau keduanya berbeda. Tanpa itu, menambah key lalu lupa
+regenerate akan **tak terlihat oleh 168 test yang membaca sumber** dan sangat
+terlihat oleh pengguna.
+
+**Empat hal yang tidak terlihat dari rencana:**
+
+1. **`LOCALES` berhenti berarti "bahasa yang ada".** Ia kini berarti "bahasa yang
+   sudah diunduh". Picker bahasa di `panels.js` meng-enumerasi
+   `Object.entries(LOCALES)` — dibiarkan, ia akan menampilkan **dua** pilihan,
+   dan `saveSettings()` yang jatuh ke `'en'` saat pilihan tidak ada akan
+   **mereset bahasa pengguna secara diam-diam**. Itu persis bug #3539, masuk
+   lewat pintu berbeda. Picker kini memakai manifest, dan
+   `test_issue3539_language_dropdown_all_locales.py` diperbarui untuk menjaga
+   kontraknya alih-alih ekspresi lamanya.
+2. **`LOCALES[it]` bukan `LOCALES['it']`.** Generator awalnya memakai fungsi
+   yang sama untuk *key* object literal dan *subscript* bracket. Tanpa kutip,
+   `it:` sah sebagai key sementara `LOCALES[it]` membaca **variabel** bernama
+   `it` dan melempar ReferenceError. Ditangkap oleh verifikasi ekuivalensi,
+   bukan oleh mata.
+3. **Urutan dokumen adalah yang menghilangkan kedipan Inggris.** Snippet di
+   `index.html` berjalan saat parsing dan memakai `document.write` — pola yang
+   sudah dipakai berkas itu untuk `<base href>` — sehingga bundel bahasa masuk
+   **dalam urutan dokumen**: sesudah `core.js` (yang mendeklarasikan `LOCALES`),
+   sebelum setiap script yang memanggil `t()`. Terverifikasi di browser: pada
+   instalasi berbahasa Rusia, `t('tab_chat')` sudah `'Чат'` dan
+   `<html lang>` sudah `ru-RU` pada paint pertama.
+4. **Ada permintaan ganda yang tidak kelihatan.** `loadLocale()` di akhir
+   `core.js` memanggil `setLocale('ru')` saat `ru.js` **belum** dieksekusi, jadi
+   `loadLocaleBundle()` menyisipkan tag kedua untuk berkas yang sudah dalam
+   perjalanan. Sekarang ia mengadopsi tag yang tertunda. Terverifikasi:
+   `ru.js fetched exactly once`.
+
+#### P1.3 — lazy xterm (bukan `terminal.js`)
+
+`terminal.js` **tidak** ikut di-lazy. Ia 6,9 KiB gzip tapi punya 9 entry point
+yang dipanggil berkas lain; membuat stub untuk sembilan fungsi demi 6,9 KiB
+adalah risiko yang tidak dibayar. **xterm adalah 68,2 dari 75,1 KiB (91%) target
+item ini**, dan ia bersih: `terminal.js` sudah punya `_xtermReady()` dan pesan
+kegagalan yang layak, dan hanya ada **satu** call site (`_startComposerTerminal`,
+yang sudah `async`).
+
+xterm juga **dikeluarkan dari pre-cache service worker**. Pre-cache mengunduhnya
+juga, hanya pada jadwal berbeda — itu akan membelanjakan ulang byte yang baru
+saja dihemat. Tidak ada yang hilang saat offline: terminal adalah PTY hidup di
+server.
+
+#### ⛔ P1.2 — terhenti: asumsi "satu launcher" tidak berlaku
+
+Rencana mengatakan "injeksi `<script>` sederhana + promise cache saat launcher
+pertama di-tap". Diukur, `panels.js` tidak berbentuk begitu:
+
+| Ukuran | Nilai |
+|---|---|
+| Fungsi top-level | 599 |
+| Dipanggil dari berkas lain atau `index.html` | **101** |
+| Terpasang di handler `onclick=` inline di `index.html` | **74** |
+| Dipanggil `boot.js` saat startup | 17 (14 dijaga `typeof`, **3 tidak**) |
+
+Yang tidak dijaga menutup pintunya: **`loadWorkspaceList()` dipanggil tanpa
+syarat di `boot.js:3851`** saat boot, dan `switchPanel()` adalah navigasi rail
+utama. Membuat `panels.js` lazy berarti membangun lapisan stub untuk 74 handler
+inline plus menyelesaikan ketiga panggilan boot itu — bukan "injeksi script
+sederhana", dan justru kelas perubahan yang gagal secara halus di produksi.
+
+**Estimasi rencana (1 hari) berasal dari analisa saya sendiri di §0.8 yang tidak
+pernah mengukur kopling ini.** Itu kesalahan saya, dan angkanya di atas adalah
+koreksinya. Opsi, terurut dari yang saya rekomendasikan:
+
+1. **Delegasi event, bukan stub.** Ganti 74 `onclick=` inline dengan satu
+   listener terdelegasi yang memuat `panels.js` lalu memutar ulang aksinya.
+   Perubahan nyata (~2–3 hari), tapi menghasilkan satu pintu masuk, bukan 74.
+2. **Pecah `panels.js`, jangan di-lazy seluruhnya.** Kanban, Logs, Insights,
+   Extensions adalah panel yang jelas terpisah dan jarang dibuka. Memindahkan
+   ketiganya keluar mungkin menangkap sebagian besar 154 KiB tanpa menyentuh
+   jalur boot.
+3. **Biarkan.** 154 KiB tetap ada, cold path berhenti di ~1.004 KiB.
+
+#### ⛔ P1.4 — terhenti: memindahkan 452 aturan melewati 1.631 aturan lain
+
+Rencananya "`style.core.css` ↔ `style.skins.css`". Diukur:
+
+| Ukuran | Nilai |
+|---|---|
+| Aturan `[data-skin=…]` top-level | 452 |
+| Sebarannya di dalam berkas | byte 1,8% → 66,0% |
+| Aturan **non-skin** yang berselang di antaranya | **1.631 (240 KB)** |
+| Aturan skin di dalam `@media`/`@supports` | 4 |
+
+Aturan skin bukan blok yang bisa dipotong; ia tersebar di dua pertiga berkas.
+Mengekstraknya ke stylesheet yang dimuat belakangan memindahkan 452 aturan
+melewati 1.631 aturan lain — **penataan ulang cascade**, di 20 tema visual, di
+repo yang **tidak punya test regresi visual** untuk menangkap akibatnya.
+
+Imbalannya **18,4 KiB — 1,8% dari 1.022 KiB sekarang**, dan hanya untuk pengguna
+skin default. Itu rasio risiko/imbalan terburuk di seluruh backlog. Saya tidak
+mengerjakannya bukan karena sulit, tapi karena mengubah tampilan 20 tema demi
+1,8% tanpa cara memverifikasinya adalah pertukaran yang buruk.
+
+Kalau tetap diinginkan, prasyaratnya adalah **screenshot regresi per skin**
+lebih dulu — dan itu sendiri lebih besar daripada P1.4.
+
+#### Verifikasi
+
+| Yang diperiksa | Hasil |
+|---|---|
+| Ekuivalensi split ↔ monolith | **16/16 locale**: setiap key, setiap value (fungsi dibandingkan sebagai teks sumber), manifest, `t()`, label bahasa yang belum diunduh |
+| Browser — muat dingin | core.js saja; **tidak ada** bundel bahasa; `LOCALES` berisi 1; manifest tahu 16; nol error konsol |
+| Browser — instalasi bahasa Rusia | `ru.js` **tepat sekali**; `<html lang>=ru-RU`; `t('tab_chat')='Чат'` di paint pertama |
+| Browser — ganti bahasa saat jalan | `de` diambil sesuai permintaan, `t('new_conversation')='Neuer Chat'`, pilihan tersimpan, balik ke `en` instan |
+| Browser — `hermes-lang` ngawur | jatuh ke Inggris, nol uncaught error |
+| Browser — xterm | tidak diambil saat muat; dimuat sesuai permintaan dengan `?v=`; panggilan kedua tidak mengambil ulang |
+| `tests/browser_smoke.py` | lulus, nol error konsol |
+| `tests/browser_responsive.py` | **9/9 viewport** lulus |
+| Suite penuh | **15.041 lulus**, 246 dilewati, **2 gagal** — keduanya bereproduksi di pohon bersih (`test_5774b` setgid di tmpfs macOS, `test_issue6067` layout helper) |
+| Ruff pada berkas baru | bersih |
+
+> **Catatan untuk §0.8:** re-audit menyatakan klaim layout §0.2 tidak bisa
+> diverifikasi ulang karena Playwright tidak ada. Playwright dipasang untuk
+> pekerjaan ini, dan `tests/browser_responsive.py` kini **lulus 9/9 viewport di
+> commit ini** — jadi klaim itu tidak lagi dibawa maju tanpa bukti.
+
+### 0.11 P2 terlaksana (2026-08-31)
+
+**Ketiga item P2 selesai.** Tidak ada yang dihentikan. Yang berubah dari rencana
+adalah **isi** dua di antaranya: pengukuran menemukan tiga cacat yang tidak ada
+di daftar, dan satu blocker yang akan membuat P2.3 gagal secara sunyi di
+produksi.
+
+| Item | Rencana | Hasil |
+|---|---|---|
+| **P2.1** Perkuat service worker | 2–3 hr | ✅ Selesai + 3 cacat pre-cache yang tidak terdaftar |
+| **P2.2** Audit a11y | 2–3 hr | ✅ Selesai — **40 → 0** kontrol tanpa nama yang bisa dibacakan |
+| **P2.3** Vendor PDF.js + Mermaid | 1 hr | ✅ Selesai — CSP kini **nol** origin eksternal |
+
+**Biaya cold path: +11,6 KiB gzip** (955,1 KiB, anggaran 1.042,0 KiB). Rinciannya
+di bawah; itu harga yang saya pilih dan alasannya ada.
+
+#### P2.3 — dan `.mjs` yang akan membuatnya gagal tanpa pesan error
+
+Divendor: `static/vendor/mermaid/10.9.3/` (3,18 MB mentah / 971 KiB gzip) dan
+`static/vendor/pdfjs/4.9.155/` (1,64 MB / 487 KiB). Keduanya **tetap lazy** —
+tidak ada di `index.html`, tidak ada di `SHELL_ASSETS`, dijaga oleh test.
+
+CSP sesudahnya:
+
+```
+script-src   'self' 'unsafe-inline' https://static.cloudflareinsights.com blob:
+worker-src   blob: 'self'
+connect-src  'self' <loopback dev> <HERMES_WEBUI_CSP_CONNECT_EXTRA>
+```
+
+Nol `cdn.jsdelivr.net`. `tests/test_vendored_frontend_assets.py` kini melarangnya
+**secara total** — di `static/*.js`, `index.html`, dan `api/helpers.py`.
+Larangannya menyasar **bentuk URL** (`https://cdn.jsdelivr.net`), bukan nama
+host: beberapa berkas menjelaskan *mengapa* CDN itu hilang, dan test yang
+melarang menyebut namanya akan mendorong orang menghapus penjelasannya alih-alih
+mempertahankan sifatnya. Pola yang sama dipakai untuk setiap larangan substring
+di test-test baru; tanpanya, komentar saya sendiri yang menjatuhkannya.
+
+**Blocker yang tidak ada di rencana.** `api/routes.py:_STATIC_MIME` tidak
+mengenal `mjs`, jadi ekstensinya jatuh ke default `text/plain` — dan browser
+**menolak** menjalankan ES module yang disajikan sebagai `text/plain` (strict
+MIME checking, tanpa opsi override, tanpa pesan yang menyebut sebabnya). PDF.js
+ships sebagai `.mjs`. Tanpa satu baris di map itu, vendoring akan "berhasil"
+sepenuhnya lalu preview PDF diam-diam turun ke tautan unduh, dan konsol tidak
+memberi petunjuk apa pun. Ditemukan dengan memuat berkasnya, bukan dengan
+membaca kode.
+
+Satu keputusan diubah setelah diukur: SRI hash mermaid dari CDN **dipertahankan**
+karena berkas vendor ternyata byte-identik dengan salinan CDN-nya. Bahaya SRI
+di sini bukan hash-nya ada, tapi hash-nya **basi** — ia gagal tertutup dan
+sunyi. Jadi alih-alih menghapus atributnya,
+`test_every_pinned_sri_hash_matches_the_vendored_file` **menghitung ulang**
+ketiga hash (mermaid, KaTeX, js-yaml) terhadap berkas di disk.
+
+#### P2.1 — tiga cacat pre-cache yang bukan bagian dari rencana
+
+Rencananya "pre-cache vendor lokal yang tersisa". Saat membandingkan apa yang
+`index.html` benar-benar minta dengan apa yang `sw.js` benar-benar simpan:
+
+| Cacat | Akibat |
+|---|---|
+| `outline.js` + `extension_settings.js` **tidak ada** di `SHELL_ASSETS` | Keduanya `<script defer>` di setiap cold load; boot offline muncul tanpa keduanya |
+| `smd.min.js` + `katex.min.css` di-pre-cache **dengan** `?v=`, halaman meminta **tanpa** | Setiap lookup miss. Lebih buruk dari tidak pre-cache: byte-nya tetap diunduh saat install lalu tidak pernah terpakai |
+| `katex.min.js` di-pre-cache **dengan** `?v=`, `ui.js` meminta **tanpa** | Sama, arah berlawanan |
+
+Tidak ada satu pun yang bisa dilihat suite lama, karena setiap assertion yang
+ada memeriksa **keberadaan sebuah aturan**, bukan **kesepakatan antara dua
+daftar**. `test_every_eager_cold_path_asset_is_precached` adalah bentuk umumnya:
+ia menurunkan daftar permintaan dari `index.html` (termasuk `import` inline) dan
+membandingkannya dengan `SHELL_ASSETS` — jadi `<script>` baru masuk kontrak sejak
+saat ditulis.
+
+Juga diperbaiki di jalan yang sama: `_vendorAssetUrl` **tidak** meng-encode ulang
+token versi. `index.html` menerimanya sudah ter-percent-encode dari server
+(`quote(WEBUI_VERSION, safe="")`), jadi `encodeURIComponent()` akan
+men-escape ganda versi apa pun yang perlu di-escape — yang nyata adalah fallback
+`"not detected"`, jadi `not%2520detected`, dan setiap entri pre-cache miss.
+
+**Kriteria pre-cache dibuat eksplisit**, karena "vendor lokal yang tersisa"
+tidak menjawab pertanyaannya: *apakah ia membuat konten yang SUDAH di-cache bisa
+dibaca, atau ia butuh backend hidup?*
+
+- **Di-cache** — KaTeX, js-yaml. Transkrip ter-cache yang penuh math atau blok
+  YAML ter-render lengkap tanpa server.
+- **Tidak** — xterm (terminal adalah PTY hidup), PDF.js (487 KiB), Mermaid
+  (971 KiB). Terlalu berat dibelanjakan pada setiap install untuk fallback yang
+  sudah turun dengan baik (tautan unduh, blok kode).
+- **Tidak** — 150+ grammar Prism (1,3 MB). Blok kode tetap ter-render, hanya
+  tanpa warna.
+
+**Cache kedua, umur berbeda.** `hermes-data-v1` menyimpan hanya dua endpoint
+baca — `GET …/api/sessions` dan `GET …/api/session` — dan **sengaja tidak
+di-key oleh versi**: satu deploy tidak boleh menghapus satu-satunya salinan sesi
+yang bisa dibaca pengguna di dalam kereta. Batas yang benar bukan versi, tapi
+**identitas**, jadi ia dibersihkan saat sign-out (pesan eksplisit ke worker) dan
+saat sebuah revalidasi mendapat 401/403.
+
+Regex endpoint-nya di-anchor ke akhir path (`/(?:^|\/)api\/sessions$/`). Itu
+bukan kerapian: `/api/sessions/events` dan `/api/sessions/gateway/stream` adalah
+SSE, dan menyerahkan body ter-cache ke `EventSource` merusak sinkronisasi
+real-time dengan cara yang terlihat seperti bug server. Diverifikasi di browser:
+offline, keduanya gagal seperti seharusnya.
+
+**Stale-while-revalidate dibuat opt-in per request, bukan global.** Ini
+argumen keamanannya, dan ia mengubah rencana: menerapkan SWR ke *setiap*
+`/api/sessions` berarti refetch setelah **ganti profil** dilayani dari cache —
+kedipan sesi milik profil sebelumnya. Halaman mengirim `X-Hermes-Cache: swr`
+pada **tepat satu** request, boot dingin sidebar, di mana alternatifnya adalah
+skeleton. Setiap poll berikutnya tetap network-first.
+
+Notifikasi ke halaman **dijaga oleh perbandingan body**, bukan dikirim setiap
+kali. Tanpa itu: layani cache → beri tahu → halaman refetch → layani cache →
+beri tahu → live-lock. Dengan itu, pass kedua menemukan keduanya sama dan
+berhenti sendiri.
+
+**Antrian kirim: IndexedDB, di-flush oleh halaman.** Background Sync akan jadi
+jawaban yang jelas, dan Safari tidak mengimplementasikannya — sementara iOS
+Safari adalah tempat paling mungkin sebuah tab Hermes berada saat offline. Jadi
+`static/outbox.js` (365 baris) memakai IndexedDB (bertahan melewati crash tab dan
+restart browser, tidak seperti array in-memory) dan flush dipicu halaman:
+`online`, `visibilitychange`, dan saat load.
+
+Bukan localStorage, meski antrian per-sesi yang sudah ada memakainya: ini
+memegang **satu-satunya salinan** tulisan pengguna yang belum terkirim, ditulis
+dari jalur kegagalan, dan localStorage sinkron, ~5 MB, serta hal pertama yang
+dihapus "clear site data".
+
+Pemicu enqueue-nya presisi, bukan dugaan: `api()` melempar `TypeError` mentah
+dari `fetch` saat request tidak pernah mencapai server (sudah retry 3× dengan
+backoff), dan **setiap** error HTTP yang ia lempar membawa `.status` numerik.
+Jadi "TypeError tanpa status" adalah sinyal, bukan perkiraan konektivitas.
+Kalau antrian **menolak** (private browsing, kuota), kodenya jatuh ke jalur error
+lama yang memulihkan draft — teks pengguna harus selamat lewat salah satu jalan.
+
+**Shell offline.** Urutannya: `'./'` yang ter-cache (aplikasi sungguhan, yang
+kini boot dengan data) → `static/offline.html` → string literal, sebagai jaring
+terakhir. Yang kedua ada untuk satu kasus yang tidak bisa ditutup shell: cold
+start di mana `'./'` belum pernah di-cache. Ia read-only atas prinsip — setiap
+tulisan butuh server, dan kontrol yang diam-diam tidak melakukan apa pun lebih
+buruk daripada tidak ada kontrol — dan me-render transkrip dengan
+`textContent`, bukan `innerHTML`.
+
+#### P2.2 — 40 kontrol tanpa nama, dan satu baris yang menghapusnya
+
+`index.html`: 206 `<button>`, 87 `aria-label`. Diukur di Chromium sungguhan,
+**40 kontrol tidak punya nama yang bisa dibacakan sama sekali** — termasuk
+**setiap** tab di rail kiri, **setiap** aksi di header panel, tombol dikte, dan
+tombol voice mode. Di VoiceOver atau TalkBack masing-masing berbunyi, kira-kira,
+"button".
+
+Penyebabnya satu baris yang bermaksud baik. Tombol icon-only membawa
+`data-tooltip` + `data-i18n-title`, dan `applyLocaleToDOM()`:
+
+```js
+el.setAttribute('data-tooltip', val);
+if (el.hasAttribute('title')) el.removeAttribute('title');
+```
+
+`data-tooltip` adalah tooltip CSS — `::after` dengan `content`. Tidak ada
+assistive technology yang membacanya. Dan cabang itu menghapus `title`, satu-satunya
+atribut yang **bisa** dibaca, untuk mencegah tooltip native ikut menyala (#1775).
+**Jadi melokalkan halaman adalah yang menghapus nama terakhirnya.**
+
+| Sebelum | Sesudah |
+|---|---|
+| 40 kontrol ter-render tanpa nama | **0** |
+| 87 `aria-label`, 17 terlokalkan | 148 `aria-label`, **58** terlokalkan |
+
+Perbaikannya berlapis, sengaja:
+
+1. **38 tombol** mendapat `aria-label` + `data-i18n-aria-label` eksplisit di
+   markup — bekerja sebelum JS jalan, dan terlihat saat review.
+2. **23 tombol lain** ternyata punya `aria-label` **hanya Inggris** di samping
+   tooltip yang terlokalkan. Itu regresi untuk 15 dari 16 bahasa, dan lebih
+   buruk dari tooltip yang digantinya, karena tooltipnya *dulu* terlokalkan.
+   Semuanya kini membawa kunci yang sama dengan tooltipnya, dan sebuah test
+   menolak keduanya memakai kunci berbeda.
+3. **`applyLocaleToDOM` memasok `aria-label`** saat elemen tidak punya nama
+   apa pun — jaring untuk tombol tooltip yang dibangun di JS, yang tidak
+   terlihat test statis. Dijaga agar **tidak pernah** menimpa label yang sudah
+   ada, karena `aria-label` menang atas teks: penulisan tanpa syarat akan
+   membekukan label dinamis ("78% used · $0.04", nama model sekarang) di string
+   generik yang basi.
+
+Lima tombol **sengaja dikecualikan** dan alasannya ada di test: label mereka
+*adalah* isinya, ditulis JS saat mereka jadi terlihat, dan `display:none`
+sebelumnya. `aria-label` statis di sana adalah regresi, bukan perbaikan.
+
+**Fokus: bukan sekadar Tab trap.** Sheet bawah sudah men-trap Tab. Di ponsel itu
+tidak membeli apa pun: pengguna VoiceOver/TalkBack **tidak** menekan Tab, mereka
+menyapu pohon aksesibilitas, dan handler Tab tidak bisa menghentikannya. Mereka
+akan menyapu keluar dari sheet terbuka ke chat di belakangnya tanpa tanda bahwa
+mereka sudah keluar.
+
+Yang benar-benar mengurung adalah `aria-modal="true"` plus `aria-hidden` +
+`inert` pada semua di luarnya. Itu sekarang satu implementasi,
+`HermesA11y.isolate()`, dipakai **tiga** overlay: sheet bawah (yang punya trap
+sendiri), drawer sidebar, dan slide-over workspace — **dua terakhir sebelumnya
+tidak punya apa-apa**: tanpa role, tanpa aria-modal, tanpa pemindahan fokus,
+tanpa Escape.
+
+Drawer dan slide-over dipasang lewat **MutationObserver pada kelasnya**, bukan
+panggilan di setiap toggle. `mobile-open` ditambahkan di **lima** tempat di
+`boot.js` dan `panels.js` dan dihapus di dua; menjahit `isolate()`/`release()` ke
+ketujuhnya berarti orang berikutnya yang menambah yang kedelapan mendapat drawer
+yang kembali tidak aksesibel secara sunyi — persis kegagalan yang menghasilkan
+keadaan ini. Kelas itu satu fakta yang disetujui CSS dan kode ini, jadi
+mengamatinya menutup semua call site, termasuk yang belum ditulis. Ia juga
+mengoreksi diri: kelasnya hanya diset di mode overlay, jadi di lebar tablet —
+di mana sidebar in-flow dan **tidak boleh** diisolasi — observer-nya tidak
+pernah menyala.
+
+Backdrop sheet **tidak boleh** jadi `inert`: ia target tap-untuk-menutup.
+Menandainya `aria-hidden` saat dibuat membuat `isolate()` melewatinya
+seluruhnya — karena ia hanya menyentuh sibling yang belum tersembunyi, aturan
+yang juga menjaga `release()` tidak pernah **membuka** sesuatu yang bukan
+miliknya untuk dibuka.
+
+**Live region punya lantai, bukan hanya isi.** Live region yang disuapi setiap
+perubahan state lebih buruk daripada tidak ada: antrian bicara menumpuk dan
+pengguna tidak bisa mendengar apa pun, termasuk yang sedang ia ketik. Jadi:
+teks identik tidak pernah diulang, ada jarak minimum antar ucapan, dan **burst
+di dalam jarak itu mengecil menjadi satu ucapan berisi teks terbaru** — bukan
+lima ucapan berantre. Streaming diumumkan pada **transisi** `setBusy`, bukan
+pada setiap panggilan. Diukur di browser: **lima** panggilan `setBusy`
+menghasilkan **dua** ucapan.
+
+**Kartu approval** sudah `role="alertdialog"` dengan `aria-labelledby` +
+`aria-describedby`, dan fokus sudah dipindahkan ke tombol pertama. Dua celah:
+
+1. `approvalCmd` — **perintah yang akan dijalankan** — tidak ada di
+   `aria-describedby`. Hal paling penting untuk didengar sebelum menjawab tidak
+   pernah diucapkan. Sekarang ada.
+2. Saat fokus ada di composer, fokus **sengaja tidak** dirampas — merampas fokus
+   di tengah kalimat adalah kegagalan aksesibilitas tersendiri. Tapi approval
+   memblokir agent sampai dijawab, jadi diam juga bukan pilihan: ia diumumkan
+   `assertive`. Dijaga `!sameApproval`, karena poller-nya me-render ulang
+   approval yang sama tiap beberapa detik.
+
+Dua kunci i18n yang **mati** ikut ketangkap gerbang nama: `outline_toggle` tidak
+ada di **satu pun** dari 16 bundel, dan `workspace_add_title` hanya ada di `pt`.
+Keduanya `data-i18n-title`, jadi chip Outline dan aksi "Add space" tidak pernah
+terlokalkan di mana pun. Keduanya kini lengkap 16 bahasa.
+
+#### Biaya, dinyatakan apa adanya
+
+| Berkas | Delta gzip |
+|---|---|
+| `static/outbox.js` (baru) | +4,24 KiB |
+| `static/boot.js` (`HermesA11y` + observer overlay) | +3,64 KiB |
+| `static/messages.js` (enqueue offline + pengumuman approval) | +1,88 KiB |
+| `static/ui.js` (`_vendorAssetUrl` + transisi busy) | +1,56 KiB |
+| `static/sessions.js` (header SWR) | +0,28 KiB |
+| **Total cold path** | **+11,6 KiB** |
+
+Cold path: **955,1 KiB** gzip, anggaran `test_frontend_payload_budget.py`
+1.042,0 KiB. `static/offline.html` (5,0 KiB) **tidak** di cold path — ia hanya
+di-pre-cache.
+
+`outbox.js` **harus** di cold path: ia perlu ada **sebelum** kirim pertama gagal,
+dan flush-nya harus jalan saat load. Melazy-kannya berarti kirim pertama yang
+gagal saat offline tidak punya tempat untuk pergi — persis kasus yang jadi alasan
+ia ada. 4,2 KiB agar pesan pengguna tidak hilang adalah pertukaran yang saya
+ambil dengan sadar, di dalam anggaran yang dipasang P1.0.
+
+#### Verifikasi
+
+Semua di bawah dijalankan, bukan disimpulkan dari kode.
+
+| Yang diperiksa | Hasil |
+|---|---|
+| CSP tersaji | Nol `jsdelivr` di `script-src`/`worker-src`/`connect-src` |
+| `.mjs` tersaji | `application/javascript; charset=utf-8`, `max-age=31536000, immutable` |
+| Mermaid dari vendor | Diagram ter-render, `typeof mermaid === 'object'` |
+| PDF.js dari vendor | Blob module import berhasil, `getDocument` ada |
+| Pre-cache ↔ permintaan | 29 entri shell; 8 URL yang tadinya mismatch kini **cocok semua** |
+| Cache data | `/api/sessions?...` tersimpan setelah request pertama yang dikontrol worker |
+| Offline: daftar sesi | Dilayani dari cache (SWR **dan** plain) |
+| Offline: varian query lain | `TypeError: Failed to fetch` — tidak ada match kunci yang salah |
+| Offline: `/api/session` 404 | **Tidak** ter-cache (hanya 200 JSON) — gagal seperti seharusnya |
+| Offline: `/api/projects` | Tidak diintersep — gagal |
+| Offline: `/api/sessions/events` | Tidak diintersep — SSE tetap SSE |
+| Offline: navigasi tanpa `'./'` | `static/offline.html`, memperlihatkan sesi ter-cache + antrian |
+| Offline: navigasi dengan `'./'` | Aplikasi sungguhan boot, banner offline, **nol** pageerror |
+| Outbox | `enqueue`/`list`/`count`/`clear` round-trip lewat IndexedDB |
+| Nama aksesibel | **40 → 0** kontrol ter-render tanpa nama |
+| Lokalisasi `aria-label` | `ja`: チャット / 設定 / 新しい会話 / アウトライン |
+| Drawer sidebar | `role=dialog`, `aria-modal`, berlabel, fokus masuk, luar `inert`, Escape menutup, semua dipulihkan |
+| Slide-over workspace | Sama; atribut dibersihkan saat ditutup |
+| Sheet bawah | Fokus ke kontrol pertama, luar `inert`, backdrop `aria-hidden` tapi **tidak** `inert`, Escape menutup, fokus kembali ke opener |
+| Live region | 5 `setBusy` → **2** ucapan |
+| Kartu approval | `aria-describedby` berisi `approvalCmd`; semua tombol bernama |
+| Konsol | Nol error di seluruh pengujian di atas |
+| Test baru | 59 (`test_offline_shell_and_outbox.py` 31, `test_button_accessible_names.py` 28) |
+| Suite penuh | **15.078 lulus**, 218 dilewati, 2 xfailed, 1 xpassed, **2 gagal** — keduanya pre-existing dan sama dengan yang dicatat §0.10 (`test_5774b` setgid di tmpfs macOS, `test_issue6067` layout helper) |
+
+> **Satu jebakan suite yang layak dicatat.** Sebuah run yang lebih awal juga
+> menggagalkan `test_static_asset_resolver::test_service_worker_and_favicon_follow_selected_static_root`,
+> dan itu **bukan** regresi: `WEBUI_VERSION` membawa suffiks `-dirty-<sha1 dari
+> git diff HEAD>` (`api/updates.py:_dirty_suffix`), jadi menyunting berkas apa
+> pun **saat** suite berjalan mengubah token yang di-substitusikan ke `sw.js` di
+> tengah jalan dan assertion byte-per-byte-nya gagal. Ia lulus di run yang
+> bersih. Kalau test itu gagal sendirian, periksa dulu apakah ada yang mengedit
+> working tree, sebelum mencari sebab lain.
+
+**Delapan test lama diperbarui, dan alasannya layak dicatat** karena enam di
+antaranya gagal dengan cara yang sama: **assertion-nya memindai komentar.** Test
+yang melarang substring (`localStorage`, `registration.sync`, `innerHTML`,
+`**Error:**`, `'./'`, `cdn.jsdelivr.net`) gagal pada prosa yang menjelaskan
+*mengapa* berkasnya menghindari hal itu. Membiarkannya akan mendorong orang
+berikutnya menghapus penjelasannya, bukan mempertahankan sifatnya — jadi
+masing-masing sekarang memindai kode dengan komentar dibuang. Dua sisanya nyata:
+`test_issue347` memakai jendela 2.200 karakter tetap yang kebetulan sudah nyaris
+penuh (sekarang brace-matched), dan `test_japanese_locale` memakai regex yang
+mengandaikan **tidak ada** brace antara `ja: {` dan `_label:` — yang berhenti
+benar begitu sebuah key di atasnya memakai placeholder `{0}` (sekarang memakai
+`extract_locale_block` yang sudah ada di berkas itu).
+
+Satu perubahan perilaku ikut jatuh dari test yang gagal: `signOut()` sebelumnya
+akan **menelan** kegagalan pembersihan lokal ke dalam `catch` miliknya dan tidak
+pernah redirect. Server sudah membatalkan sesi pada titik itu, jadi kegagalan
+membersihkan salinan offline tidak boleh meninggalkan pengguna di halaman yang
+masih tampak masuk. Pembersihannya kini best-effort dan non-fatal.
+### 0.12 P4 terlaksana — dan gerbang P4.1 akhirnya diukur (2026-08-31)
+
+**P4.1 punya prasyarat yang tertulis di rencananya sendiri:** *"Kerjakan hanya
+jika angka Lighthouse setelah P1 masih tidak dapat diterima."* Angka itu
+**belum pernah diukur** — §4.6 menandainya `[belum terverifikasi]`. Jadi hal
+pertama yang dikerjakan di sini adalah mengukurnya, bukan menebaknya.
+
+Lighthouse 12 dijalankan sungguhan (preset mobile default: throttling CPU 4×,
+profil jaringan 4G lambat), 3 run, nilai median:
+
+| | Skor mobile | FCP | LCP | TBT | TTI |
+|---|---:|---:|---:|---:|---:|
+| Setelah P2 | **71** | 2.855 ms | 7.824 ms | 58 ms | 8.578 ms |
+| Setelah perbaikan gzip | **76** | 1.956 ms | 5.952 ms | 45 ms | 7.663 ms |
+| Setelah P4.2 | **75** | 1.956 ms | 6.901 ms | 43 ms | 7.806 ms |
+
+**Gerbang P4.1 TERBUKA: 76 < 85.** Rinciannya di
+[§0.12.3](#0123-p41--gerbangnya-terbuka-pekerjaannya-tidak-dikerjakan).
+
+#### 0.12.1 Temuan terbesar sesi ini bukan bagian dari P4
+
+Audit pertama menandai `uses-text-compression` senilai ~900 ms pada URL kosong —
+yaitu **dokumen utamanya sendiri**:
+
+```
+GET /            Content-Length: 231085     (tanpa Content-Encoding)
+GET /static/style.css   Content-Length: 101383   Content-Encoding: gzip
+```
+
+**Shell aplikasi dikirim tanpa kompresi sama sekali.** `_serve_static` meng-gzip
+setiap aset, dan `j()` meng-gzip setiap respons JSON — tapi `t()`, yang menyajikan
+`/`, `/index.html`, dan `/session/<id>`, tidak pernah mendapat perlakuan yang
+sama. Jadi **item terbesar di jalur kritis adalah satu-satunya yang tidak
+dikompresi siapa pun**:
+
+| | Sebelum | Sesudah |
+|---|---:|---:|
+| `GET /` | 231.085 byte | **44.344 byte** |
+
+**−188 KB (−81%) di setiap cold load** — lebih besar daripada P1.3 (−67 KiB) dan
+P1.4 (−18,4 KiB) digabung, dari menyalin pola tiga baris yang sudah dipakai
+`j()`. Hasil terukurnya: **+5 poin Lighthouse, FCP −899 ms, LCP −1.872 ms,
+TTI −915 ms.**
+
+Level 6, bukan 4 atau 9, dan itu diukur bukan dikira: level 9 memberi 0,2 KiB
+tambahan untuk 40% CPU lebih; level 4 menghemat 1,3 ms tapi membayar 2 KiB.
+
+**Mengapa anggaran P1.0 tidak melihatnya.** Gerbang itu mem-parsing `index.html`
+untuk menemukan **aset yang dirujuknya**, dan menimbang berkas di disk — ia tidak
+pernah menimbang **dokumennya sendiri**, dan tidak pernah melihat header respons.
+Sebuah gerbang byte yang mengukur berkas, bukan transfer, secara struktural buta
+terhadap header `Content-Encoding` yang tidak diset. Itu bukan bug di gerbangnya;
+itu batas yang layak dicatat.
+
+#### 0.12.2 P4.2 — dan koreksi terhadap "nol dari sembilan"
+
+Rencana menyatakan: *"Nol dari sembilan item ini ada di codebase hari ini —
+diverifikasi: tidak ada `startViewTransition`, `navigator.vibrate`,
+`share_target`, `setAppBadge`, atau `navigator.share` di `static/`."*
+
+Grep itu memeriksa **lima nama API**, lalu kesimpulannya digeneralisasi ke
+sembilan item. **Tiga dari sembilan sudah ada**, dan ketiganya lebih lengkap dari
+deskripsi rencananya:
+
+| # | Item | Keadaan sebenarnya |
+|---|---|---|
+| 1 | Share Target API | ✗ tidak ada → **dibuat** |
+| 2 | Web Share API | ✗ tidak ada → **dibuat** |
+| 3 | Optimistic UI | ✅ **sudah ada** — `messages.js` mem-push bubble user dan me-render **sebelum** POST `/api/chat/start` |
+| 4 | Skeleton screen | ✅ **sudah ada** — `showSessionListSkeleton` + `.skeleton-row`, termasuk varian reduced-motion dan jalur "skeleton jujur" untuk profil yang diketahui kosong |
+| 5 | App Badging API | ✗ tidak ada → **dibuat** |
+| 6 | Pull-to-refresh | ⚠️ **ada di elemen yang salah** — terpasang di `#messages`, PWA-only, label hardcoded → **dipindahkan/diperluas** |
+| 7 | View Transitions API | ✗ tidak ada → **dibuat** |
+| 8 | Haptic feedback | ✗ tidak ada → **dibuat** |
+| 9 | Mode suara hands-free | ✅ **sudah ada** — voice mode berbasis turn (#1333): listen → send → TTS → listen, dengan fallback TTS server, preferensi voice/rate/pitch, dan recovery TTS browser |
+
+Jadi yang dikerjakan adalah **lima yang benar-benar hilang plus satu yang salah
+tempat**, bukan sembilan. Tiga yang sudah ada **tidak** diimplementasikan ulang —
+dan `tests/test_native_platform_integrations.py` kini memasang pin regresi untuk
+ketiganya, supaya pembacaan "P4.2 belum dimulai" di masa depan tidak menghasilkan
+dua implementasi dari perilaku yang sama.
+
+**Satu modul, `static/native.js` (397 baris, 5,1 KiB gzip).** Kelimanya adalah
+"minta sesuatu ke platform lalu tangani saat ia menolak", dan kelimanya dipanggil
+dari beberapa tempat. Menyebar `try{ navigator.x() }catch{}` di setiap call site
+adalah cara mendapatkan lima fallback yang sedikit berbeda dan salah satunya
+melempar di iOS.
+
+**Share Target: dua jalur, satu konsumen.**
+
+- `sw.js` menangkap POST-nya, membaca `FormData` langsung, dan menaruh teks
+  **dan berkas** di cache `hermes-share-inbox`. Ini yang membuat berkas bekerja
+  tanpa round-trip upload dan tanpa state di server.
+- `/share-target` di server adalah fallback untuk saat tidak ada worker yang
+  mengontrol halaman. Teks saja, lewat query string, dengan flag
+  `share_files_dropped` — menghilangkan berkas tanpa penjelasan terlihat seperti
+  kehilangan data.
+
+Urutan pengecekan di `sw.js` load-bearing: sebuah share datang sebagai **POST yang
+`mode`-nya `navigate`**, jadi cabang share-target harus diuji **sebelum** handler
+navigasi, atau POST-nya diteruskan ke jaringan dan jalur worker tidak pernah
+jalan. Redirect-nya **303**, bukan 302: 303 mengubah POST menjadi GET, sehingga
+refresh tidak mengirim ulang share yang sama.
+
+Dua aturan yang lebih penting dari fiturnya sendiri, keduanya dijaga test:
+**tidak pernah auto-send** (share sheet itu satu tap; mengirim pesan ke agent
+karena satu tap tidak bisa dibatalkan) dan **tidak pernah menimpa draft**
+(ditambahkan dengan baris kosong, bukan menggantikan).
+
+`/share-target` **CSRF-exempt**, dan itu perlu alasan bukan kelalaian: POST-nya
+disintesis oleh share sheet OS, jadi tidak ada tempat token sesi bisa berasal.
+Aman karena handler-nya **tidak menulis state server apa pun** — efek yang bisa
+dicapai dengan memalsukannya adalah menaruh teks di composer, yang bisa dilakukan
+halaman mana pun dengan menautkan ke `/?share_text=…`. Composer tidak pernah
+auto-send, dan teksnya dimasukkan sebagai teks.
+
+**View Transitions: propertinya bukan animasinya.** `viewTransition()`
+membungkus update DOM yang load-bearing di `switchPanel`, jadi callback-nya
+**wajib** tetap jalan saat API-nya tidak ada, saat reduced-motion aktif, saat
+sudah ada transisi berjalan, dan saat tab tersembunyi. Kalau tidak, UI berhenti
+merespons navigasi — kegagalan spektakuler untuk fitur kosmetik. Diverifikasi di
+browser: **3 panggilan → 3 callback jalan**, yang kedua (re-entrant) benar tidak
+memulai transisi tapi tetap menerapkan perubahannya.
+
+Yang juga penting: hanya blok class-toggle sinkron yang masuk ke dalam callback.
+Delapan `await loadX()` sesudahnya **di luar** — sebuah transisi menahan snapshot
+visual sampai callback-nya selesai, jadi request jaringan di dalamnya akan
+membekukan UI selama request itu.
+
+**Pull-to-refresh: satu implementasi, dua scroller.** Ia lahir sebagai IIFE
+anonim yang terikat ke `#messages`; rencana memintanya di **daftar sesi**. Salinan
+kedua dari handler gestur 60 baris adalah cara mendapatkan dua gestur yang
+berperilaku berbeda di satu layar — jadi ia difaktorkan jadi
+`_attachPullToRefresh(el, {onRefresh})` dan dipanggil dua kali. Daftar sesi
+**tidak** di-gate ke standalone (menarik daftar untuk menyegarkannya adalah idiom
+mobile biasa di tab browser juga, dan `overscroll-behavior-y:contain` sudah
+mencegah gestur itu berantai ke pull-to-refresh browser); transkrip
+mempertahankan gate aslinya. Labelnya kini terlokalkan, indikatornya
+`role="status"` + `aria-live` (panah berputar tidak memberi apa pun ke pembaca
+layar), dan dibangun dengan panggilan DOM bukan `innerHTML` karena isinya string
+terjemahan.
+
+**Haptics di dua tap yang mengubah sesuatu**, bukan di navigasi: kirim, dan
+jawab approval (`warn` untuk deny, supaya kedua hasilnya bisa dibedakan tanpa
+melihat). Haptic approval **mendahului** POST-nya — buzz yang datang 400 ms
+kemudian terbaca sebagai gangguan, bukan konfirmasi. Di-gate pada
+`navigator.userActivation`: Chromium mencatat *"Blocked call to
+navigator.vibrate…"* ke konsol, dan repo ini punya smoke test yang menuntut
+konsol bersih.
+
+**App Badge digerakkan dari satu map**, `_approvalPendingBySession`, yang
+dilewati baik jalur set maupun clear — jadi badge tidak bisa menyimpang dari apa
+yang aplikasi yakini sedang menunggu. Dijumlahkan lintas sesi. Handler `push` di
+worker memakai `setAppBadge()` **tanpa argumen** dengan sengaja: payload-nya tidak
+membawa hitungan, dan bentuk tanpa argumen adalah "unspecified number" menurut
+spec — sebuah titik, bukan angka yang salah.
+
+#### 0.12.3 P4.1 — gerbangnya terbuka, pekerjaannya **tidak** dikerjakan
+
+76 < 85. Prasyarat rencananya terpenuhi, dan prasyarat kedua ("hanya dengan
+anggaran P1.0 sudah menjaga hasilnya") juga terpenuhi. Jadi P4.1 **berwenang**
+untuk dikerjakan.
+
+**Saya tidak mengerjakannya, dan alasannya bukan waktu.** Rencananya sendiri
+menilainya **1–2 minggu · risiko tinggi**, dan tiga berkas itu adalah jalur
+render pesan. Refactor modul yang setengah jadi di jalur render adalah hasil
+terburuk yang mungkin dari sesi ini — lebih buruk daripada tidak memulainya.
+
+Yang bisa saya berikan adalah **datanya**, supaya keputusannya bukan tebakan.
+Diukur di HEAD ini:
+
+| Peluang tersisa (Lighthouse) | Hemat |
+|---|---:|
+| Reduce unused JavaScript | **2.510 ms** |
+| Minify JavaScript | 900 ms |
+| Eliminate render-blocking resources | 688 ms |
+| Reduce unused CSS | 540 ms |
+
+JavaScript tak terpakai, per berkas:
+
+| Berkas | Dikirim | Tak dieksekusi saat load | % |
+|---|---:|---:|---:|
+| `ui.js` | 281,0 KB | 249,7 KB | **89%** |
+| `panels.js` | 158,1 KB | 147,2 KB | **93%** |
+| `messages.js` | 115,7 KB | 111,7 KB | **97%** |
+| `sessions.js` | 115,9 KB | 88,1 KB | 76% |
+
+**Dua catatan yang mengubah bentuk P4.1, dan tidak ada di rencana:**
+
+1. **"Tak dieksekusi saat load" ≠ "bisa dihapus".** Sebagian besar byte itu
+   berjalan nanti, saat fiturnya dipakai. Jadi imbalan nyatanya menuntut
+   pemisahan **per fitur** dengan pemuatan tertunda — persis kesimpulan yang
+   sudah dicapai investigasi P1.2 untuk `panels.js` (74 handler `onclick=` inline,
+   101 pemanggil lintas berkas, rekomendasi: delegasi event). Angka −498,3 KiB di
+   rencana adalah total byte, bukan byte yang bisa dihapus.
+
+2. **Biaya terbesar yang tersisa mungkin bukan JavaScript.** `style.css`
+   render-blocking, menyumbang 904 ms, dan **91,6% tidak terpakai saat load**
+   (92.898 byte). §0.10 menolak P1.4 dengan benar sebagai kerja **byte**
+   (−18,4 KiB gzip, rasio terburuk di backlog) — tapi Lighthouse mengukur biaya
+   `style.css` sebagai **panjang jalur kritis**, bukan berat, dan itu framing yang
+   berbeda dengan kesimpulan yang mungkin berbeda. TBT hanya 43 ms: main thread
+   **bukan** hambatannya. LCP-lah, dan LCP menunggu CSS.
+
+Rekomendasi saya, jika P4.1 dibuka: **ukur dulu efek CSS non-blocking pada LCP
+sebelum menyentuh tiga berkas render pesan itu.** Ia jauh lebih murah dan
+menyerang metrik yang benar-benar buruk. Itu tetap keputusan Anda; P4.1 dan P1.4
+sama-sama masih terbuka dan tidak ada yang memblokirnya.
+
+#### 0.12.4 Biaya dan verifikasi
+
+| Berkas | Delta gzip |
+|---|---|
+| `static/native.js` (baru) | +5,12 KiB |
+| `static/boot.js` (share drain, Web Share, PTR) | +2,22 KiB |
+| `static/style.css` (view transitions, PTR) | +1,01 KiB |
+| `static/messages.js` (badge, haptics) | +0,72 KiB |
+| `static/ui.js` (refactor PTR) | +1,23 KiB |
+| **Total P4** | **≈ +10,3 KiB** |
+
+**Anggaran P1.0 menyala, dan itu gerbangnya bekerja:** total 1.072.251 byte
+melewati 1.067.000 sebesar **5.251 byte** — praktis seluruhnya `native.js`.
+Anggarannya dinaikkan ke **1.083.000** dengan alasannya ditulis di berkasnya,
+persis prosedur yang diinstruksikan test itu sendiri. Headroom-nya **+1%, bukan
++2%** seperti angka aslinya: 2% dari total baru adalah 21 KiB — cukup untuk modul
+seukuran `native.js` lagi mendarat tanpa terlihat, yang justru mengalahkan
+tujuannya.
+
+`native.js` dimuat **eager**, dan itu pilihan: empat dari lima kapabilitasnya
+hanya dipanggil dari gestur pengguna dan akan senang di-lazy — tapi inbox Share
+Target dikuras **saat boot**, karena aplikasi bisa dibuka **oleh** sebuah share,
+dan menunda itu di belakang fetch berarti teks yang dibagikan datang setelah
+composer sudah tampil.
+
+Semua di bawah dijalankan, bukan disimpulkan dari kode.
+
+| Yang diperiksa | Hasil |
+|---|---|
+| Lighthouse mobile, 3 run | 71 → **76** (gzip) → 75 (P4.2); selisih 76↔75 **di dalam variansi** — spread LCP 5.815–6.909 ms di dalam satu konfigurasi |
+| `GET /` terkompresi | 231.085 → **44.344** byte; klien tanpa `Accept-Encoding: gzip` **tidak berubah** (231.085) |
+| Manifest tersaji | `share_target` lengkap, `action` relatif (dalam scope) |
+| Share Target — navigasi POST sungguhan | SW menangkap → stash → 303 → shell aplikasi → **composer berisi teks yang dibagikan** → URL dibersihkan |
+| Share Target — berkas | `note.txt` (5 byte) mendarat di cache, dibaca kembali sebagai `File`, di-stage lewat `addFiles` |
+| Share Target — fallback server | POST multipart → `303 ./?share_text=…&shared=1`; composer berisi teks; **tanpa** service worker |
+| Share Target — POST kosong / body rusak / berkas terlampir | ketiganya **tetap 303**, tidak ada 500 |
+| `viewTransition` | 3 panggilan → **3 callback jalan**; re-entrant tidak memulai transisi kedua; `data-vt` dibersihkan |
+| Panel switch di bawah transisi | tasks / skills / chat ketiganya tetap `active` |
+| Badge | `setBadge(3)` → ulang → `clearBadge()`, ketiganya resolve tanpa throw di tab biasa |
+| Haptic tanpa dukungan | no-op, return `false` |
+| `share()` tanpa dukungan | `'unsupported'`, bukan throw |
+| PTR | terpasang di `#sessionList`; **tidak** di `#messages` di headless (bukan standalone — benar) |
+| `tests/browser_smoke.py` | lulus, **nol** error konsol |
+| `tests/browser_responsive.py` | **9/9 viewport** |
+| Test baru | 41 (`tests/test_native_platform_integrations.py`) |
+| Suite penuh | **15.120 lulus**, 218 dilewati, **2 gagal** — keduanya pre-existing dan sama dengan §0.10/§0.11 (`test_5774b` setgid di tmpfs macOS, `test_issue6067` layout helper) |
+
+**Empat test lama diperbarui.** `test_sprint9::test_no_duplicate_function_definitions`
+menangkap dua tabrakan nama yang saya buat sendiri: `_label` (ui.js ↔ boot.js) dan
+`_init` **dua kali di boot.js** — satu dari modul a11y overlay P2, satu dari share
+drain P4. Keduanya closure-scoped, jadi tidak ada tabrakan runtime; tapi seluruh
+berkas ini berbagi satu global scope, gerbangnya benar tidak membedakannya, dan
+pembaca yang meng-grep `function _init` juga tidak bisa. Diganti jadi
+`_ptrLabel`, `_initOverlayA11y`, `_initShareDrain`.
+
+**Tiga test lain diperbarui.** Dua gagal karena node driver mengekstrak satu
+fungsi ke dalam konteks `vm` kosong, di mana referensi ke fungsi tetangga adalah
+ReferenceError — diperbaiki dengan `typeof` guard yang **sudah dipakai baris di
+bawahnya** (`if (typeof syncTopbar === 'function')`), yang juga menyatakan
+kebenarannya: badge adalah enhancement opsional, bukan bagian dari kontrak
+approval. Yang ketiga menyematkan ekspresi inline pull-to-refresh yang persis;
+karena PTR kini satu factory untuk dua scroller, satu string hardcoded hanya bisa
+menggambarkan salah satunya — assertion-nya diganti dengan propertinya (keduanya
+menyegarkan **data**, `reload()` tetap di belakang guard-nya) dan **diperkuat**
+dengan test kedua bahwa daftar sesi tidak di-gate ke standalone sementara
+transkrip masih.
 ---
 
 ## 1. Ringkasan Eksekutif — Jawaban Jujur
@@ -411,11 +1504,11 @@ Rincian jujurnya:
 | Layout desktop | ✅ **Baik** | Tiga panel, container queries, resize handle |
 | **Layout tablet portrait (641–900px)** | ✅ **DIPERBAIKI** (Fase 1.2) | Panel kini terbuka sebagai slide-over di 768px & 820px — lihat [§0.2](#02-angka-sebelum--sesudah-terukur) |
 | Berfungsi tanpa internet publik (VPS air-gapped) | ✅ **DIPERBAIKI** (Fase 1.3) | Prism + xterm di-vendor; 0 request eksternal saat halaman dimuat. *Sisa:* PDF.js & Mermaid masih lazy-load dari CDN |
-| Notifikasi saat browser ditutup | ✅ **DIPERBAIKI** (Fase 3) | Web Push penuh (RFC 8291/8292) tanpa dependensi baru — lihat [§0.7](#07-fase-3--web-push-selesai) |
+| Notifikasi saat browser ditutup | ✅ **DIPERBAIKI** (Fase 3 + P0.2) | Web Push penuh (RFC 8291/8292) tanpa dependensi baru — lihat [§0.7](#07-fase-3--web-push-selesai). Pemicu kini lengkap: approval, turn selesai, **cron selesai**, dan **crash** ([§0.9](#09-p0-terlaksana-2026-08-31)) |
 | Zoom / aksesibilitas mobile | ✅ **DIPERBAIKI** (Fase 2.4) | Zoom aktif di tab browser; tetap terkunci hanya di PWA terinstal |
-| Panduan reverse proxy + TLS | ❌ **Tidak ada** | README eksplisit menyerahkan ini ke operator; hanya SSH tunnel & Tailscale yang didokumentasikan |
-| Bahasa Indonesia di UI | ❌ **Belum ada** — terhalang | Repo mewajibkan kelengkapan locale (26 test); butuh keputusan Anda — lihat [§0.4](#04-yang-tidak-dikerjakan-dan-mengapa) |
-| Berat halaman | ⚠️ **Berat** | 5,5 MB mentah / **1,4 MB gzip**; `i18n.js` sendiri 477 KB gzip berisi 15 bahasa sekaligus |
+| Panduan reverse proxy + TLS | ✅ **DIPERBAIKI (P0.1)** | [`docs/reverse-proxy.md`](docs/reverse-proxy.md) — nginx + Caddy + TLS, diagnosis SSE, subpath mount, alur Web Push. Tertaut dari `README.md` dan `docs/remote-access.md`. Lihat [§0.9](#09-p0-terlaksana-2026-08-31) |
+| Bahasa Indonesia di UI | ⚠️ **Ada, tapi 9,5%** | Locale `id` terkirim dan bisa dipilih; terukur **163 key dari 1.713** milik `en`. Inti (layar pertama, composer, navigasi, sesi, login, sheet mobile) Indonesia; sisanya fallback ke Inggris — lihat [§0.4](#04-locale-bahasa-indonesia--selesai-kontrak-dilonggarkan) dan [§0.8](#08-re-audit-2026-08-31--pengukuran-ulang-di-f1a60e46) |
+| Berat halaman | ⚠️ **Berat** | Terukur ulang di `f1a60e46`: **5.867 KiB mentah / 1.497,5 KiB gzip** cold. `i18n.js` sendiri **485,3 KiB gzip** untuk 16 bahasa yang pengguna baca satu. Belum ada gerbang byte di CI |
 
 ### Kesimpulan praktis untuk Anda
 
@@ -907,7 +2000,18 @@ benar-benar terlihat dan bisa diklik di 768px". **Inilah persis sebabnya bug
 §6.1 lolos**: kedua aturan CSS-nya ada dan valid; yang salah adalah interaksi
 kaskadenya pada lebar tertentu — sesuatu yang hanya browser sungguhan bisa lihat.
 
-### 6.9 🟡 Tidak ada panduan reverse proxy / TLS
+### 6.9 🔴 NAIK JADI PEMBLOKIR (re-audit) — Tidak ada panduan reverse proxy / TLS
+
+> **Amandemen re-audit 2026-08-31.** Temuan ini ditulis 🟡 karena saat itu bisa
+> disiasati SSH tunnel atau Tailscale. **Setelah Fase 3 mendarat, ia menjadi 🔴.**
+> Web Push mensyaratkan secure context, jadi tanpa HTTPS seluruh `api/push.py`
+> tidak pernah menyala — dan di iOS, "Add to Home Screen" (yang juga butuh HTTPS)
+> adalah satu-satunya jalur push yang ada. Temuan ini kini memblokir fitur yang
+> sudah selesai dibangun, dan menjadi item nomor satu di seluruh backlog:
+> [P0.1](#p01---tulis-docsreverse-proxymd-nginx--caddy--tls--sse).
+> Terukur ulang: `docs/remote-access.md` masih 75 baris tanpa satu pun kata TLS,
+> dan `grep -rl proxy_buffering .` masih hanya mengembalikan dokumen ini.
+
 
 README menyatakan eksplisit:
 > "Keep reverse proxy and TLS configuration in your surrounding deployment
@@ -1155,57 +2259,29 @@ sudo systemctl daemon-reload && sudo systemctl enable --now hermes-webui
 
 #### 0.5 nginx + TLS — **konfigurasi SSE adalah bagian kritisnya**
 
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name hermes.domain-anda.com;
+> **Dipindahkan ke [`docs/reverse-proxy.md`](docs/reverse-proxy.md) (P0.1, selesai).**
+> Konfigurasi lengkap nginx dan Caddy tidak lagi tinggal di roadmap ini — ia
+> sekarang menjadi dokumentasi operator yang sesungguhnya, tertaut dari
+> `README.md` dan `docs/remote-access.md`. Menyalinnya di dua tempat berarti
+> salah satunya akan basi.
 
-    ssl_certificate     /etc/letsencrypt/live/hermes.domain-anda.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/hermes.domain-anda.com/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
+Yang ada di sana, dan tidak ada di sini sebelumnya:
 
-    client_max_body_size 100M;          # upload file ke workspace
-
-    location / {
-        proxy_pass http://127.0.0.1:8787;
-        proxy_http_version 1.1;
-
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;   # ← dibaca oleh api/auth.py
-        proxy_set_header Connection        "";        # ← keep-alive untuk SSE
-
-        # ═══ WAJIB UNTUK SSE ═══
-        # Tanpa tiga baris ini, streaming chat akan tersendat atau mati.
-        proxy_buffering    off;
-        proxy_cache        off;
-        proxy_read_timeout 24h;
-        # ═══════════════════════
-    }
-}
-
-server {
-    listen 80;
-    server_name hermes.domain-anda.com;
-    return 301 https://$host$request_uri;
-}
-```
-
-Alternatif Caddy (buffering-off adalah default-nya, jadi jauh lebih ringkas):
-
-```caddyfile
-hermes.domain-anda.com {
-    reverse_proxy 127.0.0.1:8787 {
-        flush_interval -1        # streaming tanpa buffer
-        transport http { read_timeout 24h }
-    }
-}
-```
-
-```bash
-sudo certbot --nginx -d hermes.domain-anda.com   # bila memakai nginx
-```
+- Blok nginx dan Caddy lengkap, termasuk `proxy_buffering off` dan alasannya
+- Mengapa `proxy_set_header Host $host` **wajib** — gerbang CSRF membandingkan
+  `Origin` dengan `Host`, jadi meneruskan `127.0.0.1:8787` membuat setiap POST
+  gagal sementara GET tetap jalan (mode kegagalan yang membingungkan, dan tidak
+  pernah terdokumentasi sebelumnya)
+- Hal yang sama berlaku untuk passkey: `api/passkeys.py` menurunkan WebAuthn RP
+  ID dari header `Host`
+- Ketiga variabel `TRUST_FORWARDED_*`, apa yang diperbaiki masing-masing, dan
+  kenapa semuanya opt-in
+- Subpath mount `/hermes/` — dengan garis bawah bahwa proxy **harus** memotong
+  prefiks, karena server tidak punya konsep base path
+- Bagian diagnosis **"SSE appears to hang"**: gejala, penyebab, perbaikan, dan
+  satu perintah `curl -N` untuk membuktikan buffering sudah mati
+- Alur mengaktifkan Web Push sampai tuntas, termasuk syarat Home Screen di iOS
+  dan peringatan mem-backup `.vapid_key`
 
 #### 0.6 Verifikasi dari HP
 
@@ -1333,7 +2409,7 @@ kelas bug §6.1 muncul lagi.
 > **Estimasi: 1–2 minggu** · **Prasyarat: Fase 1**
 >
 > ✅ **Selesai, kecuali 2.6 (locale Indonesia) yang terhalang** — lihat
-> [§0.4](#04-yang-tidak-dikerjakan-dan-mengapa). Commit `6512511`, `20f3f3d`,
+> [§0.4](#04-locale-bahasa-indonesia--selesai-kontrak-dilonggarkan). Commit `6512511`, `20f3f3d`,
 > `b136ea9`. Catatan: swipe tepi-kiri untuk membuka sidebar **sudah ada** di
 > upstream (#4660), jadi 2.5 hanya menambahkan pasangannya (swipe-tutup panel).
 
@@ -1531,16 +2607,28 @@ panel terminal dibuka. Terminal juga jarang dipakai di HP.
 
 #### 4.6 Target yang bisa diukur
 
-| Metrik | Sekarang (estimasi 4G) | Target |
-|---|---|---|
-| Transfer JS+CSS (cold) | ~1.400 KB gzip | **< 450 KB** |
-| First Contentful Paint | — | < 1,8 s |
-| Time to Interactive | — | < 2,5 s |
-| Repeat visit (SW hit) | — | < 0,8 s |
-| Lighthouse Mobile Performance | — | ≥ 85 |
+> **⚠️ Amandemen re-audit 2026-08-31 — target `< 450 KB` di tabel ini tidak
+> terjangkau oleh rencana Fase 4 itu sendiri.** Dihitung ulang dengan angka gzip
+> terukur, keempat item 4.1–4.4 mendarat di **~825 KiB**, bukan di bawah 450.
+> Penyebabnya: hemat 4.4 (CSS skin) ternyata hanya ~18 KiB, bukan sebanding
+> dengan yang lain, dan `ui.js` + `sessions.js` + `messages.js` (498,3 KiB gzip
+> gabungan) tidak pernah masuk rencana. Lihat
+> [§0.8 Temuan 2](#08-re-audit-2026-08-31--pengukuran-ulang-di-f1a60e46).
+> Target yang direvisi ada di [§12 P1](#-p1--sebagian-selesai-2026-08-31--cold-start-bikin-gerbangnya-dulu-baru-potong);
+> `< 450 KiB` dipindahkan ke [P4.1](#p41--pecah-modul-aplikasi-inti-uijs--sessionsjs--messagesjs---gerbang-terbuka-belum-dikerjakan)
+> sebagai pekerjaan terpisah yang berisiko jauh lebih tinggi.
 
-*(Nilai "sekarang" untuk FCP/TTI ditandai **[belum terverifikasi]** — perlu run
-Lighthouse pada deployment nyata. Angka transfer sudah terukur pasti.)*
+| Metrik | Sekarang (terukur `f1a60e46`) | Target P1 (revisi) | Target P4.1 |
+|---|---|---|---|
+| Transfer cold (HTML+JS+CSS+vendor eager) | **1.497,5 KiB gzip** | **≤ 850 KiB** | < 450 KiB |
+| First Contentful Paint | [belum terverifikasi] | < 1,8 s | < 1,8 s |
+| Time to Interactive | [belum terverifikasi] | < 2,5 s | < 2,5 s |
+| Repeat visit (SW hit) | [belum terverifikasi] | < 0,8 s | < 0,8 s |
+| Lighthouse Mobile Performance | **76** (diukur 2026-08-31, [§0.12](#012-p4-terlaksana--dan-gerbang-p41-akhirnya-diukur-2026-08-31)) | ≥ 85 | ≥ 85 |
+
+*(FCP/TTI/Lighthouse tetap **[belum terverifikasi]** — butuh run pada deployment
+HTTPS nyata, yaitu setelah [P0.1](#p01---tulis-docsreverse-proxymd-nginx--caddy--tls--sse).
+Angka transfer terukur pasti dan direproduksi lewat Lampiran B.)*
 
 ---
 
@@ -1741,95 +2829,498 @@ Minimal sebelum merilis perubahan mobile:
 
 ---
 
-## 12. Checklist Ringkas
+## 12. Backlog Terurut Prioritas
 
-### Sekarang juga (Fase 0 — 1–2 hari, tanpa ubah kode)
+> **Menggantikan checklist per-sprint yang lama.** Sprint 1–3 sudah selesai;
+> mempertahankan penomoran sprint hanya menyembunyikan apa yang harus dikerjakan
+> **berikutnya**. Daftar di bawah adalah seluruh sisa kerja, diurutkan sekali
+> secara global.
+>
+> **Cara urutannya dibuat.** Setiap item dinilai pada empat sumbu, dengan
+> tiebreak berurutan:
+>
+> 1. **Memblokir?** — apakah ia membuat pekerjaan yang **sudah selesai** tidak
+>    bisa dipakai. Ini mengalahkan segalanya: pekerjaan yang menganggur adalah
+>    biaya yang sudah dibayar tanpa imbalan.
+> 2. **Bukti terukur** — apakah masalahnya punya angka (§0.8), bukan firasat.
+> 3. **Rasio dampak/usaha** — dampak per hari kerja.
+> 4. **Ketahanan** — apakah ia mencegah kemunduran di masa depan, atau hanya
+>    memperbaiki keadaan hari ini.
+>
+> Sumbu 1 dan 4 adalah alasan urutan ini **berbeda** dari §8: dokumentasi HTTPS
+> naik dari Fase 0 ke puncak, dan anggaran performa naik dari akhir Fase 4 ke
+> awalnya.
+
+---
+
+### ✅ P0 — SELESAI (2026-08-31) — Memblokir fitur yang sudah selesai dibangun
+
+**Kenapa ini P0 dan bukan yang lain:** ini satu-satunya item di seluruh backlog
+yang mengaktifkan kode yang sudah ada, tanpa menulis kode aplikasi sama sekali.
+
+> **Status: kedua item selesai.** Ringkasan pelaksanaan ada di
+> [§0.9](#09-p0-terlaksana-2026-08-31), termasuk tiga klaim yang **gagal
+> verifikasi** saat dokumen ditulis dan harus dikoreksi, serta keputusan desain
+> di pemicu crash yang tidak terlihat dari rencana.
+
+#### P0.1 ✅ — Tulis `docs/reverse-proxy.md` (nginx + Caddy + TLS + SSE)
+
+| | |
+|---|---|
+| **Usaha** | 0,5–1 hari · **hanya dokumentasi** |
+| **Memblokir** | Web Push (§0.7) · PWA install di iOS · Fase 5 seluruhnya |
+| **Bukti** | `grep -rl proxy_buffering .` → hanya dokumen ini; `docs/remote-access.md` 75 baris tanpa TLS; `README.md:443,447` menyerahkan ini ke operator |
+| **Prasyarat** | — |
+
+Web Push mensyaratkan secure context. Tanpa HTTPS, seluruh `api/push.py` — RFC
+8291 + RFC 8292 dari nol, terverifikasi terhadap vektor uji resmi — tidak pernah
+menyala. Di iOS, "Add to Home Screen" adalah satu-satunya jalur push, dan itu
+juga butuh HTTPS.
+
+Isi minimum:
+
+- [x] Blok nginx lengkap: TLS + `proxy_buffering off` + `proxy_read_timeout` +
+      `X-Forwarded-Proto` (materi §0.5 **dipindahkan**, bukan disalin — §0.5
+      sekarang hanya menunjuk ke sana)
+- [x] Padanan Caddy (auto-TLS; ditaruh duluan karena jauh lebih pendek)
+- [x] `HERMES_WEBUI_TRUST_FORWARDED_PROTO=1` dan kenapa cookie `Secure` bergantung padanya
+- [x] Bagian **"SSE appears to hang"** — gejala, penyebab, perbaikan, plus satu
+      perintah `curl -N` untuk membuktikannya
+- [x] Catatan subpath mount (`/hermes/`) — nginx (`proxy_pass` dengan trailing
+      slash) dan Caddy (`handle_path`)
+- [x] Tautkan dari `README.md` (dua tempat) dan `docs/remote-access.md`
+- [ ] **Verifikasi push dari HP sungguhan** — ini milik Anda, bukan saya; tidak
+      ada perangkat atau egress ke FCM/APNs di sini. Langkahnya ada di dokumen.
+
+**Tiga hal di luar rencana** yang masuk karena ditemukan saat membaca kode, dan
+tidak satu pun terdokumentasi sebelumnya:
+
+- **`proxy_set_header Host $host` sama kritisnya dengan `proxy_buffering off`.**
+  Gerbang CSRF (`api/routes.py`) membandingkan `Origin` dengan `Host`; proxy
+  yang meneruskan `127.0.0.1:8787` membuat **setiap POST gagal sementara GET
+  tetap jalan** — halaman termuat, daftar sesi tampil, mengirim pesan error.
+- **Passkey punya masalah yang sama.** `api/passkeys.py` menurunkan WebAuthn RP
+  ID dari header `Host`, jadi `Host` yang salah mendaftarkan kredensial ke
+  hostname yang salah.
+- **Tailscale + HTTP polos bukan secure context.** Lalu lintasnya benar-benar
+  terenkripsi WireGuard, tapi browser tidak peduli — push dan passkey tetap
+  mati. `docs/remote-access.md` sekarang mengatakan ini dan menunjuk ke
+  `tailscale cert`.
+
+**Selesai bila:** operator baru bisa berangkat dari VPS kosong ke push yang
+sampai di HP tanpa membaca dokumen ini.
+
+#### P0.2 ✅ — Pemicu push yang tersisa: cron selesai + crash
+
+| | |
+|---|---|
+| **Usaha** | 0,5 hari |
+| **Bukti** | `grep -rn notify_async api/` → hanya `route_approvals.py:967` dan `streaming.py:12341` |
+| **Prasyarat** | P0.1 untuk verifikasi ujung-ke-ujung |
+
+Infrastrukturnya sudah ada; masing-masing satu panggilan `push.notify_async()`.
+Dikelompokkan dengan P0.1 karena cron adalah **justru** kasus di mana browser
+pasti tertutup — nilai push tertinggi ada di sini, dan sekarang tidak terpasang.
+
+- [x] Pemicu cron-selesai — **dua jalur, bukan satu**: `api/routes.py` (jalur
+      manual `/api/crons/run`) dan `api/profiles.py` (scheduler in-process).
+      `api/background.py` yang disebut rencana ternyata soal background *task*,
+      bukan cron.
+- [x] Pemicu crash (`api/crash_visibility.py`) — **kedua** excepthook, thread
+      dan main thread
+- [x] Tag terpisah: `hermes-cron-<job_id>` dan `hermes-crash`, tidak pernah
+      bertabrakan dengan `hermes-approval-*` atau `hermes-<session_id>`
+- [x] Test: 12 test baru di `tests/test_web_push.py` (42 total, semuanya lulus)
+
+**Keputusan desain yang tidak terlihat dari rencana:**
+
+- **Crash di main thread butuh tunggu berbatas.** `notify_async` memakai daemon
+  thread, dan daemon thread **tidak selamat** dari interpreter yang sedang
+  teardown — push-nya dimulai lalu dibunuh di tengah jalan. `main_excepthook`
+  karena itu menunggu maksimal 3 detik; `thread_excepthook` tidak menunggu sama
+  sekali, karena di sana prosesnya masih hidup.
+- **Crash harus dibatasi lajunya.** Exception di dalam loop panas akan mengubah
+  satu bug jadi banjir notifikasi di lock screen. Satu push crash per 5 menit.
+- **`requireInteraction` diperluas ke `crash` dan `cron_failed`.** Sebelumnya
+  hanya `approval`. Ketiganya berarti pekerjaan berhenti dan tidak akan lanjut
+  sendiri; notifikasi yang hilang sendiri saat HP tertelungkup bukan notifikasi.
+  Cron yang **berhasil** tetap tidak menginterupsi.
+- **Default-nya gagal, bukan berhasil.** Kedua jalur cron memulai dengan
+  `success=False`, jadi exception sebelum verdict diketahui dilaporkan sebagai
+  kegagalan — bukan diam-diam mengabarkan sukses.
+
+---
+
+### 🟠 P1 — SEBAGIAN SELESAI (2026-08-31) — Cold start: bikin gerbangnya dulu, baru potong
+
+> **Hasil: 1.497,5 → 1.022,1 KiB gzip (−31,7%).** P1.0, P1.1, P1.3 selesai.
+> **P1.2 dan P1.4 terhenti** setelah diukur — keduanya bukan pekerjaan yang
+> dijelaskan rencana ini, dan keputusannya milik Anda. Lihat
+> [§0.10](#010-p1-terlaksana-sebagian-2026-08-31).
+
+**Kenapa P1 dan bukan P2:** ini satu-satunya angka yang masih buruk dan terukur
+(1.497,5 KiB gzip cold — §0.8). Di 4G ini adalah selisih antara aplikasi yang
+terasa hidup dan yang terasa berat.
+
+**Kenapa urutan di dalamnya dibalik dari Fase 4:** §8 menaruh anggaran CI di
+akhir. Itu salah arah. Repo baru saja menambah locale ke-16 dan 9 skin tanpa
+satu pun test gagal; tanpa gerbang lebih dulu, setiap penghematan di bawah akan
+tergerus diam-diam persis seperti itu.
+
+#### P1.0 ✅ — 🎯 Anggaran payload frontend di CI — **kerjakan sebelum split apa pun**
+
+| | |
+|---|---|
+| **Usaha** | 0,5 hari |
+| **Hemat** | 0 KiB — **menjaga** semua penghematan di bawah |
+| **Bukti** | 1.398 file test, nol yang menjaga byte frontend |
+
+- [x] `tests/test_frontend_payload_budget.py` — **daftar aset diparse dari `index.html`**, bukan hardcoded, supaya `<script src>` baru langsung terhitung
+- [x] Batas dipatok di ukuran saat itu + 2%, **sudah diturunkan dua kali** (P1.1, P1.3)
+- [x] Pesan gagal menyebut file dan selisih byte — **dibuktikan gagal** pada dua simulasi (file membengkak, dan modul baru ditambahkan)
+- [x] Batas per-file + batas per-bundel-bahasa + guard bahwa anggaran usang ikut dihapus saat file jadi lazy
+
+#### P1.1 ✅ — 🎯 Pecah `i18n.js` per locale — **penghematan terbesar, risiko terkecil**
+
+| | |
+|---|---|
+| **Usaha** | 1–2 hari |
+| **Hemat** | **−424,6 KiB gzip (−28% cold path)** |
+| **Bukti** | 485,3 KiB gzip = 32,4% jalur kritis untuk 16 bahasa; pengguna membaca satu |
+
+Lebih besar daripada P1.2 + P1.3 + P1.4 digabung. Risikonya kecil karena locale
+aktif sudah ada di `localStorage` sebelum paint pertama, dan `_serve_static`
+sudah melayani aset ber-fingerprint dengan `max-age=31536000, immutable` +
+ETag — infrastrukturnya tidak perlu dibangun.
+
+- [x] `scripts/split_i18n.py` → `static/i18n/<kode>.js` (2,9–37,2 KiB gzip)
+- [x] `static/i18n/core.js` = runtime + `en` + **manifest 16 bahasa**
+- [x] Locale aktif dimuat **dalam urutan dokumen** lewat `document.write` di `index.html` — bukan `boot.js`, yang berjalan terlalu lambat untuk paint pertama
+- [x] `sw.js` pre-cache **hanya `core`** — service worker tidak bisa membaca `localStorage`, jadi ia tidak bisa tahu bahasa mana
+- [x] **`static/i18n.js` tetap sumber kebenaran** — 168 berkas test membacanya lewat path; berkas hasil generate dijaga `--check`
+- [x] Turunkan batas P1.0 (1.565.000 → 1.140.000 byte)
+
+#### P1.2 ⛔ TERHENTI — Lazy-load `panels.js`
+
+> **Diukur, lalu dihentikan.** 101 dari 599 fungsi `panels.js` dipanggil dari
+> luar, 74 terpasang di `onclick=` inline, dan `loadWorkspaceList()` dipanggil
+> **tanpa syarat saat boot**. Asumsi "satu launcher" di bawah tidak berlaku, dan
+> estimasi 1 hari berasal dari analisa saya yang tidak mengukur kopling ini.
+> Tiga opsi beserta rekomendasi ada di
+> [§0.10](#010-p1-terlaksana-sebagian-2026-08-31).
+
+| | |
+|---|---|
+| **Usaha** | 1 hari |
+| **Hemat** | **−154,1 KiB gzip** |
+
+Control Center jarang dibuka pada kunjungan pertama. Injeksi `<script>` +
+promise cache saat launcher pertama di-tap; tidak butuh bundler.
+
+- [ ] Loader + promise cache (klik kedua tidak memuat ulang)
+- [ ] Indikator memuat pada tap pertama
+- [ ] Push subscribe UI hidup di `panels.js` — pastikan setting push tetap terjangkau
+- [ ] Turunkan batas P1.0
+
+#### P1.3 ✅ — Lazy-load xterm (`terminal.js` sengaja tetap eager)
+
+| | |
+|---|---|
+| **Usaha** | 0,5 hari |
+| **Hemat** | **−75,1 KiB gzip** (xterm 68,2 + `terminal.js` 6,9) |
+| **Bukti** | `index.html:113-115` memuat xterm eager di `<head>` |
+
+Naik di atas P1.4 (dari urutan §8 yang menaruh CSS lebih dulu) karena hematnya
+**4× lebih besar** dan usahanya lebih kecil — xterm hanya perlu dipindahkan dari
+`<head>` ke pembuka panel terminal.
+
+- [x] `xterm.js`, kedua addon, dan `xterm.css` dimuat oleh `_loadXterm()` di `terminal.js`, dipicu satu-satunya call site `_startComposerTerminal()`
+- [x] xterm **dikeluarkan dari pre-cache SW** — pre-cache membelanjakan ulang byte yang baru dihemat; terminal butuh PTY hidup, jadi offline tidak kehilangan apa pun
+- [ ] ~~`terminal.js` ikut lazy~~ — **tidak dikerjakan dengan sengaja**: 6,9 KiB gzip dengan 9 entry point eksternal; xterm sendiri sudah 91% dari target item ini
+- [x] `tests/test_vendored_frontend_assets.py` dipecah jadi kontrak **eager** vs **lazy** — keduanya tetap lokal dan ber-`?v=`, hanya waktunya berbeda
+- [x] Turunkan batas P1.0 (1.140.000 → 1.067.000 byte)
+
+#### P1.4 ⛔ TERHENTI — Pecah CSS core ↔ skin
+
+> **Diukur, lalu dihentikan.** 452 aturan skin tersebar di 1,8%–66% berkas,
+> dengan **1.631 aturan non-skin (240 KB) berselang di antaranya**. Memisahkannya
+> menata ulang cascade di 20 tema, di repo tanpa test regresi visual — demi
+> **18,4 KiB (1,8%)**, rasio risiko/imbalan terburuk di backlog. Lihat
+> [§0.10](#010-p1-terlaksana-sebagian-2026-08-31).
+
+| | |
+|---|---|
+| **Usaha** | 1 hari |
+| **Hemat** | **−18,4 KiB gzip** — jauh lebih kecil dari dugaan §8 |
+| **Bukti** | 97.429 / 525.290 byte `style.css` di dalam `[data-skin=…]` = 18,5% |
+
+Turun ke posisi terakhir di P1. §8 menyiratkan ini sebanding dengan yang lain;
+diukur, ia yang terkecil. Tetap dikerjakan — 20 skin akan terus bertambah dan
+`style.css` render-blocking — tapi tidak sebelum tiga item di atas.
+
+- [ ] `style.core.css` (render-blocking) ↔ `style.skins.css` (hanya bila `data-skin` ≠ default)
+- [ ] Cegah FOUC saat skin non-default dipulihkan dari `localStorage`
+- [ ] Turunkan batas P1.0
+
+> **Target P1 (direvisi, jujur):** **≤ 850 KiB gzip cold** — dari 1.497,5.
+> Target `< 450 KiB` di §4.6 **tidak terjangkau** oleh keempat item ini; lihat
+> §0.8 Temuan 2. Ia dipindahkan ke P4.1.
+>
+> **Hasil nyata: 1.022,1 KiB.** Target ≤ 850 KiB mengandaikan P1.2 mendarat;
+> tanpa P1.2 lantai rencana ini adalah ~1.004 KiB. Yang sudah dicapai adalah
+> **−475,4 KiB (−31,7%)** — 68% dari total penghematan yang direncanakan, dari
+> dua item yang risikonya paling kecil.
+
+---
+
+### ✅ P2 — Menyelesaikan yang sudah setengah jalan — **SELESAI**
+
+Semua item di sini punya infrastruktur yang sudah berdiri. Rasio dampak/usaha
+tinggi, tapi tidak ada yang memblokir dan tidak ada yang punya angka buruk.
+
+> **Ketiganya selesai (2026-08-31).** Catatan pelaksanaan, angka terukur, dan
+> empat temuan yang tidak ada di daftar ini:
+> [§0.11](#011-p2-terlaksana-2026-08-31).
+
+#### P2.1 — Perkuat service worker — ✅ selesai
+
+| | |
+|---|---|
+| **Usaha** | 2–3 hari |
+| **Bukti** | `sw.js` 292 baris; halaman offline = literal `'<h2>You are offline</h2>'` |
+
+- [x] Shell offline sungguhan (sesi terakhir yang di-cache, read-only) alih-alih string itu — `static/offline.html`; aplikasi ter-cache didahulukan karena ia kini boot dengan data
+- [x] Stale-while-revalidate untuk `GET /api/sessions` — **opt-in per request** (`X-Hermes-Cache: swr`), hanya boot dingin: SWR global akan mengedipkan sesi profil sebelumnya setelah ganti profil
+- [x] Antrian kirim di IndexedDB, di-flush saat online — `static/outbox.js`, dipicu halaman (`online` + `visibilitychange` + load), tanpa Background Sync
+- [x] Pre-cache vendor lokal yang tersisa setelah P1.3 — **plus tiga cacat pre-cache** yang tidak terdaftar: dua berkas cold-path hilang dari `SHELL_ASSETS`, dan tiga URL yang `?v=`-nya tidak cocok dengan yang diminta halaman
+
+#### P2.2 — Audit a11y: VoiceOver (iOS) + TalkBack (Android) — ✅ selesai
+
+| | |
+|---|---|
+| **Usaha** | 2–3 hari |
+| **Bukti** | `index.html`: 206 `<button>`, 87 `aria-label` |
+| **Hasil** | **40 → 0** kontrol ter-render tanpa nama yang bisa dibacakan; 148 `aria-label`, 58 terlokalkan |
+
+**Dinaikkan dari Fase 5 ke P2.** §8 menaruhnya bersama haptics dan pull-to-refresh
+sebagai "polesan native-feel". Itu salah kategori: aksesibilitas adalah
+kebenaran, bukan poles, dan aplikasi ini dipenuhi tombol icon-only — pola yang
+paling sering menghasilkan tombol tanpa nama yang bisa dibacakan.
+
+- [x] Setiap tombol icon-only punya nama yang bisa dibacakan — penyebabnya `applyLocaleToDOM` menghapus `title` dari tombol yang hanya berlabel `data-tooltip`: **melokalkan halaman** yang menghapus nama terakhirnya
+- [x] Urutan fokus pada drawer, sheet, dan slide-over; fokus terperangkap di dalam sheet terbuka — satu `HermesA11y.isolate()` untuk ketiganya: `aria-modal` + `aria-hidden` + `inert`, bukan hanya Tab trap (yang tidak berarti apa-apa saat pengguna menyapu, bukan menekan Tab)
+- [x] Live region mengumumkan streaming tanpa membanjiri — teks identik tidak diulang, ada lantai antar ucapan, burst mengecil ke satu ucapan terbaru. Diukur: 5 `setBusy` → 2 ucapan
+- [x] Kartu approval terbaca dan bisa ditindaklanjuti tanpa melihat layar — `approvalCmd` masuk `aria-describedby` (perintahnya sebelumnya tidak pernah diucapkan); diumumkan `assertive` saat fokus sengaja tidak dirampas dari composer
+- [x] Test statis: setiap `<button>` tanpa teks wajib punya `aria-label` — `tests/test_button_accessible_names.py` (28 test), dan `data-tooltip` **tidak** dihitung
+
+#### P2.3 — Vendor PDF.js + Mermaid → hapus jsdelivr dari CSP — ✅ selesai
+
+| | |
+|---|---|
+| **Usaha** | 1 hari · +~4 MB di repo |
+| **Bukti** | `api/helpers.py:103-104` — dua path jsdelivr tersisa |
+| **Nyata** | +4,8 MB mentah (Mermaid 3,18 MB + PDF.js 1,64 MB) |
+
+Keduanya lazy, jadi **tidak** memengaruhi cold start — nilainya adalah deployment
+air-gapped sungguhan dan CSP tanpa origin eksternal sama sekali.
+
+- [x] Vendor keduanya di bawah `static/vendor/` — SRI hash CDN dipertahankan (berkasnya byte-identik) dan sebuah test kini **menghitung ulang** ketiga hash terhadap disk, karena bahayanya bukan hash-nya ada tapi hash-nya basi
+- [x] Hapus jsdelivr dari `script-src`, `worker-src`, `connect-src` — nol origin CDN di seluruh policy
+- [x] `tests/test_vendored_frontend_assets.py` melarang jsdelivr sepenuhnya — menyasar bentuk URL, bukan nama host, agar penjelasan *mengapa* CDN-nya hilang tidak jadi hal pertama yang dihapus orang untuk melewati gerbangnya
+- [x] Muat lazy (jangan pernah masuk jalur kritis) — dijaga test; **satu blocker tak terdaftar**: `.mjs` tidak ada di `_STATIC_MIME`, dan browser menolak ES module yang disajikan `text/plain` tanpa pesan apa pun
+
+---
+
+### 🟢 P3 — Kesenjangan paritas yang diketahui dan disengaja
+
+Semuanya sudah didokumentasikan sebagai keputusan sadar. Dikerjakan saat ada
+permintaan nyata, bukan karena ada di daftar.
+
+#### P3.1 — Promosikan locale `id` dari 9,5% ke lengkap
+
+| | |
+|---|---|
+| **Usaha** | **~1.550 key** — per keluarga key, berkali-kali |
+| **Bukti** | `id` = 163 key vs `en` 1.713 (§0.8 Temuan 3) |
+
+Urutan berdasarkan seberapa sering permukaannya disentuh: **settings → onboarding
+→ cron → ekstensi**. Alur destruktif (mematikan autentikasi, hapus sesi) terakhir
+dan wajib ditinjau penutur, bukan mesin — itu alasan asli `PARTIAL_LOCALES` ada.
+
+- [ ] Satu keluarga key per PR
+- [ ] Hapus entri `id` dari `PARTIAL_LOCALES` hanya setelah penutur meninjau seluruh bundle
+- [ ] Setelah P1.1, ini juga **tidak lagi menambah byte** ke pengguna non-Indonesia
+
+#### P3.2 — Filter tabel markdown di HP
+
+| | |
+|---|---|
+| **Usaha** | 1–2 hari |
+| **Status** | Kesenjangan yang disengaja, tercatat di `tests/test_mobile_feature_parity.py` |
+
+Butuh surface sheet per tabel — ini perubahan desain, bukan perbaikan. Primitif
+`HermesSheet` dari Fase 2.2 sudah ada, jadi biayanya kini lebih rendah dari saat
+keputusan ini dibuat.
+
+---
+
+### ⚪ P4 — Rasa native & refactor besar
+
+#### P4.1 — Pecah modul aplikasi inti (`ui.js` / `sessions.js` / `messages.js`) — ⛔ **gerbang terbuka, belum dikerjakan**
+
+| | |
+|---|---|
+| **Usaha** | **1–2 minggu · risiko tinggi** |
+| **Hemat** | hingga −498,3 KiB gzip — satu-satunya jalan ke target `< 450 KiB` |
+| **Gerbang** | **Lighthouse mobile = 76, target ≥ 85 → terbuka** (diukur 2026-08-31) |
+
+Dipisahkan dari P1 dengan sengaja: tiga file ini adalah jalur render pesan, dan
+memecahnya adalah refactor modul, bukan pemisahan file. Kerjakan **hanya** jika
+angka Lighthouse setelah P1 masih tidak dapat diterima — dan hanya dengan
+anggaran P1.0 sudah menjaga hasilnya.
+
+> **Prasyaratnya kini terukur, bukan lagi `[belum terverifikasi]`.** Keduanya
+> terpenuhi: skornya 76 (< 85) dan anggaran P1.0 terpasang. Pekerjaannya tetap
+> **tidak** dikerjakan — refactor setengah jadi di jalur render pesan lebih buruk
+> daripada tidak memulainya. Data untuk memutuskannya, termasuk dua hal yang
+> mengubah bentuk item ini (byte "tak dieksekusi" ≠ byte yang bisa dihapus; dan
+> biaya terbesar yang tersisa mungkin `style.css` render-blocking, bukan JS), ada
+> di [§0.12.3](#0123-p41--gerbangnya-terbuka-pekerjaannya-tidak-dikerjakan).
+
+#### P4.2 — Native-feel, diurutkan menurut apa yang benar-benar terasa — ✅ **selesai**
+
+Diurutkan ulang dari daftar datar §8:
+
+> **Catatan pelaksanaan:**
+> [§0.12.2](#0122-p42--dan-koreksi-terhadap-nol-dari-sembilan). **Tiga dari
+> sembilan ternyata sudah ada** — footnote di bawah hanya meng-grep lima nama API
+> lalu menggeneralisasi. Yang dikerjakan: lima yang benar-benar hilang, plus satu
+> yang terpasang di elemen yang salah.
+
+1. [x] **Share Target API** di manifest — **dibuat.** `sw.js` menangkap POST-nya (teks **dan berkas**, tanpa state server); `/share-target` di server adalah fallback teks-saja untuk saat tak ada worker yang mengontrol. Tidak pernah auto-send, tidak pernah menimpa draft
+2. [x] **Web Share API** — **dibuat.** Link share dan ekspor Markdown lewat share sheet OS, dengan clipboard/download tetap sebagai fallback; `canShareFiles()` ditanya sebelum membangun `File`
+3. [x] **Optimistic UI** — ✅ **sudah ada sebelum sesi ini.** `messages.js` mem-push bubble user dan me-render sebelum POST `/api/chat/start`
+4. [x] **Skeleton screen** — ✅ **sudah ada sebelum sesi ini.** `showSessionListSkeleton` + `.skeleton-row`, dengan varian reduced-motion
+5. [x] **App Badging API** — **dibuat.** Digerakkan dari `_approvalPendingBySession` (satu map, dijumlahkan lintas sesi); handler `push` memakai `setAppBadge()` tanpa argumen karena payload tidak membawa hitungan
+6. [x] **Pull-to-refresh** pada daftar sesi — **dipindahkan ke elemen yang benar.** Sebelumnya terpasang di `#messages` dan PWA-only. Kini satu factory untuk dua scroller; daftar sesi tidak di-gate standalone, label terlokalkan, indikator `role="status"`
+7. [x] **View Transitions API** — **dibuat.** Membungkus swap sinkron `switchPanel`; delapan `await loadX()` sengaja **di luar** callback-nya. Callback selalu jalan meski transisinya tidak
+8. [x] **Haptic feedback** — **dibuat.** Kirim + jawab approval saja; di-gate pada `navigator.userActivation` supaya Chromium tidak mencatat "Blocked call to navigator.vibrate" ke konsol
+9. [x] **Mode suara hands-free** — ✅ **sudah ada sebelum sesi ini.** Voice mode berbasis turn (#1333): listen → send → TTS → listen, dengan fallback TTS server
+
+*~~Nol dari sembilan item ini ada di codebase hari ini — diverifikasi: tidak ada
+`startViewTransition`, `navigator.vibrate`, `share_target`, `setAppBadge`, atau
+`navigator.share` di `static/`.~~*
+**Klaim itu salah.** Grep-nya memeriksa lima nama API lalu kesimpulannya
+digeneralisasi ke sembilan item; **#3, #4, dan #9 sudah ada**, ketiganya lebih
+lengkap dari deskripsi di daftar ini. `tests/test_native_platform_integrations.py`
+memasang pin regresi untuk ketiganya supaya tidak ada yang membangunnya dua kali.
+
+---
+
+### Fase 0 — deployment (tetap berlaku, tidak berubah)
+
+Ini bukan sisa pekerjaan pengembangan; ini yang Anda lakukan untuk memakai apa
+yang sudah ada. Tanpa ubah kode, 1–2 hari.
 
 - [ ] Provision VPS, ufw hanya 22/80/443, SSH key-only
 - [ ] Install hermes-agent + hermes-webui
 - [ ] `.env`: `HOST=127.0.0.1`, `PASSWORD=…`, `TRUST_FORWARDED_PROTO=1`, `SESSION_TTL=2592000`
 - [ ] systemd unit + `systemctl enable --now`
-- [ ] nginx/Caddy + certbot — **`proxy_buffering off` untuk SSE**
-- [ ] Verifikasi 9 poin checklist §0.6 dari HP sungguhan
-- [ ] Add to Home Screen
+- [ ] nginx/Caddy + certbot — **`proxy_buffering off` untuk SSE** *(P0.1 menjadikan langkah ini bisa diikuti)*
+- [ ] Verifikasi checklist §0.6 dari HP sungguhan
+- [ ] Add to Home Screen *(prasyarat push di iOS)*
 - [ ] Backup harian `~/.hermes/` dan `~/workspace/`
 
-### Sprint 1 (Fase 1) — ✅ SELESAI
+---
 
-- [x] Kontrak breakpoint di CSS + JS + test sinkronisasi
-- [x] 🔴 Perbaiki panel workspace di 641–1024px
-- [x] 🔴 Vendor Prism.js + xterm.js; perketat CSP
-- [x] Perbaiki overflow horizontal 14px
-- [x] Harness `tests/browser_responsive.py` di CI
+### Ringkasan urutan
 
-### Sprint 2 (Fase 2) — ✅ SELESAI (1 tertunda)
+| # | Item | Usaha | Dampak |
+|---|---|---|---|
+| ~~**P0.1**~~ | ~~`docs/reverse-proxy.md`~~ | ✅ **selesai** | Mengaktifkan Web Push + PWA iOS yang sudah dibangun |
+| ~~**P0.2**~~ | ~~Pemicu push cron + crash~~ | ✅ **selesai** | Menutup Fase 3 |
+| ~~**P1.0**~~ | ~~Anggaran payload di CI~~ | ✅ **selesai** | Menjaga semua di bawahnya |
+| ~~**P1.1**~~ | ~~Pecah `i18n.js`~~ | ✅ **selesai** | **−408,4 KiB** |
+| **P1.2** | Lazy `panels.js` | ⛔ **terhenti** | −154,1 KiB — butuh keputusan Anda |
+| ~~**P1.3**~~ | ~~Lazy xterm~~ | ✅ **selesai** | −67,0 KiB |
+| **P1.4** | Pecah CSS core ↔ skin | ⛔ **terhenti** | −18,4 KiB — rasio terburuk di backlog |
+| ~~**P2.1**~~ | ~~Perkuat service worker~~ | ✅ **selesai** | Offline sungguhan: daftar sesi + transkrip ter-cache, antrian kirim |
+| ~~**P2.2**~~ | ~~Audit a11y~~ | ✅ **selesai** | 40 → 0 kontrol tanpa nama; 3 overlay jadi dialog modal |
+| ~~**P2.3**~~ | ~~Vendor PDF.js + Mermaid~~ | ✅ **selesai** | Air-gapped penuh; CSP nol origin eksternal |
+| **P3.1** | Promosikan locale `id` | ~1.550 key | Paritas bahasa |
+| **P3.2** | Filter tabel di HP | 1–2 hr | Paritas fitur |
+| **P4.1** | Pecah modul inti | ⛔ **gerbang terbuka** (76 < 85) | Jalan ke < 450 KiB — keputusan Anda, data di §0.12.3 |
+| ~~**P4.2**~~ | ~~Native-feel ×9~~ | ✅ **selesai** | 5 dibuat, 1 dipindahkan, 3 ternyata sudah ada |
 
-- [x] Komponen bottom sheet
-- [x] Kembalikan saved prompts + outline di mobile *(filter tabel: tetap desktop-only, disengaja)*
-- [x] Audit Control Center di 393px — 11 target sentuh diperbaiki
-- [x] Perbaiki zoom + `viewport-fit=cover`
-- [x] Gestur swipe *(swipe-buka sudah ada di upstream; ditambahkan swipe-tutup)*
-- [x] Locale `id` — ±150 key inti; kontrak kelengkapan dilonggarkan lewat `tests/locale_contract.py`
+**P0 selesai** ([§0.9](#09-p0-terlaksana-2026-08-31)). Yang tersisa dari P0
+adalah satu langkah yang hanya bisa Anda lakukan: deploy di belakang HTTPS lalu
+tekan "Kirim push uji" dari HP.
 
-### Sisa kerja baru yang ditemukan saat implementasi
+**P1 selesai sebagian** ([§0.10](#010-p1-terlaksana-sebagian-2026-08-31)):
+cold path **1.497,5 → 1.022,1 KiB (−31,7%)**, dijaga oleh anggaran di CI.
 
-- [ ] Vendor PDF.js + Mermaid (~4 MB) → hapus jsdelivr dari CSP sepenuhnya
-- [ ] Filter tabel markdown di HP (butuh surface sheet per tabel)
+**Dua keputusan menunggu Anda** sebelum P1 bisa ditutup — keduanya sudah diukur,
+bukan diperkirakan: apakah P1.2 dikerjakan lewat delegasi event (~2–3 hari),
+dipecah sebagian, atau dilepas; dan apakah P1.4 layak dikerjakan sama sekali
+mengingat imbalan 1,8%-nya menuntut test regresi visual lebih dulu.
 
-### Sprint 3 (Fase 3) — ✅ SELESAI
+**P2 selesai seluruhnya** ([§0.11](#011-p2-terlaksana-2026-08-31)): +11,6 KiB
+gzip di cold path (955,1 KiB, anggaran 1.042,0), 59 test baru, dan CSP tanpa
+origin eksternal sama sekali.
 
-- [x] VAPID + endpoint subscribe/unsubscribe/test *(tanpa dependensi baru)*
-- [x] Handler `push` + `pushsubscriptionchange` di service worker *(`notificationclick` sudah ada)*
-- [x] Pemicu: **approval menunggu** + turn selesai *(cron & crash: belum — lihat §0.7)*
-- [x] UI setting push, terpisah dari notifikasi lokal
-- [x] Dokumentasikan syarat "Add to Home Screen" untuk iOS *(di UI, bukan hanya di docs)*
-
-### Sprint 4 (Fase 4 — 1–2 minggu)
-
-- [ ] Pecah `i18n.js` per locale (**−445 KB gzip**)
-- [ ] Lazy-load `panels.js` (−151 KB)
-- [ ] Lazy-load `terminal.js` + xterm
-- [ ] Pecah CSS core vs skin
-- [ ] Perkuat service worker (offline shell, SWR, antrian kirim)
-- [ ] Anggaran performa di CI
-
-### Sprint 5 (Fase 5 — 1–2 minggu)
-
-- [ ] View Transitions, haptics, pull-to-refresh, skeleton, optimistic UI
-- [ ] Share Target + Web Share
-- [ ] App Badging
-- [ ] Audit a11y VoiceOver/TalkBack
+**Sisa backlog kini P3 dan P4** — semuanya kesenjangan yang disengaja atau
+refactor besar, tidak ada yang memblokir. Dua keputusan P1 di atas masih
+menunggu Anda; keduanya tidak memblokir P3/P4.
 
 ---
 
 ## Lampiran A — Ringkasan File Kunci
 
-| File | Ukuran | Peran |
-|---|---|---|
-| `server.py` | 30 KB | Entry point, `ThreadingHTTPServer`, TLS, isolasi jaringan mode test |
-| `bootstrap.py` | 29 KB | Discovery agent, ensure dependency, launcher |
-| `ctl.sh` | 31 KB | Lifecycle daemon (start/stop/status/logs/restart) |
-| `api/routes.py` | 1,23 MB | 223 route eksak + 11 prefix; static serving; SSE dispatch |
-| `api/streaming.py` | 615 KB | Eksekusi agent, streaming SSE, `Last-Event-ID` |
-| `api/auth.py` | 47 KB | PBKDF2, sesi, rate limit, trusted-header, cookie |
-| `api/helpers.py` | 53 KB | Template CSP, gzip, util respons |
-| `api/config.py` | 481 KB | Konfigurasi, discovery model/provider |
-| `static/index.html` | 216 KB | Template shell tunggal |
-| `static/style.css` | 505 KB | Seluruh CSS: layout, 71 `@media`, 6 `@container`, 11 skin |
-| `static/ui.js` | 1,018 KB | Helper DOM, render markdown, kartu tool, context ring |
-| `static/boot.js` | 172 KB | **Navigasi mobile**, keyboard inset, tema/skin, bfcache |
-| `static/i18n.js` | 1,722 KB | 15 locale |
-| `static/sw.js` | 8,5 KB | Service worker, pre-cache shell |
-| `static/manifest.json` | 1,2 KB | Manifest PWA |
+> Ukuran di-refresh pada re-audit `f1a60e46` (2026-08-31). Satuan KiB = 1024 byte;
+> kolom gzip memakai level 6, sama seperti yang dikirim `_serve_static`.
+
+| File | Mentah | Gzip | Peran |
+|---|---:|---:|---|
+| `server.py` | 29,1 KB | — | Entry point, `ThreadingHTTPServer`, TLS, isolasi jaringan mode test |
+| `bootstrap.py` | 28,1 KB | — | Discovery agent, ensure dependency, launcher |
+| `ctl.sh` | 30,5 KB | — | Lifecycle daemon (start/stop/status/logs/restart) |
+| `api/routes.py` | 1,21 MB | — | Static serving (gzip -6 + ETag + `immutable`); SSE dispatch |
+| `api/streaming.py` | 637 KB | — | Eksekusi agent, streaming SSE, `Last-Event-ID`, **pemicu push turn-selesai** |
+| `api/auth.py` | 46 KB | — | PBKDF2, sesi, rate limit, trusted-header, cookie |
+| `api/helpers.py` | 53 KB | — | Template CSP — **nol origin CDN** setelah [P2.3](#p23--vendor-pdfjs--mermaid--hapus-jsdelivr-dari-csp---selesai); gzip, util respons |
+| `api/config.py` | 481 KB | — | Konfigurasi, discovery model/provider |
+| `api/push.py` | **19,6 KB** | — | **Fase 3** — VAPID (RFC 8292) + aes128gcm (RFC 8291) di atas `cryptography` |
+| `api/route_approvals.py` | — | — | **Pemicu push paling bernilai** — approval menunggu (`:967`) |
+| `static/index.html` | 221,0 KB | **42,0** | Template shell tunggal; 5 `<script src>` + 4 `<link>`, semuanya lokal |
+| `static/i18n.js` | 1.746,8 KB | **485,3** | **16 locale** — 32,4% jalur kritis; target [P1.1](#p11----pecah-i18njs-per-locale--penghematan-terbesar-risiko-terkecil) |
+| `static/ui.js` | 1.020,7 KB | 273,7 | Helper DOM, render markdown, kartu tool, context ring; lazy-import PDF.js + Mermaid |
+| `static/panels.js` | 634,5 KB | 154,1 | Control Center + UI langganan push; target [P1.2](#p12--terhenti--lazy-load-panelsjs) |
+| `static/style.css` | 515,5 KB | 99,0 | Layout, 74 `@media` (6,8% byte), 6 `@container`, **20 skin** (18,5% byte) |
+| `static/sessions.js` | 436,8 KB | 113,2 | Daftar/CRUD sesi; kandidat [P4.1](#p41--pecah-modul-aplikasi-inti-uijs--sessionsjs--messagesjs---gerbang-terbuka-belum-dikerjakan) |
+| `static/messages.js` | 435,6 KB | 111,4 | Render transkrip; kandidat [P4.1](#p41--pecah-modul-aplikasi-inti-uijs--sessionsjs--messagesjs---gerbang-terbuka-belum-dikerjakan) |
+| `static/boot.js` | 185,5 KB | 56,0 | **Navigasi mobile**, `BP.PHONE`/`BP.TABLET`, keyboard inset, tema/skin, bfcache, `HermesSheet`, **`HermesA11y`** (isolasi modal + live region) |
+| `static/terminal.js` | 27,0 KB | 6,9 | Terminal embedded; target [P1.3](#p13---lazy-load-xterm-terminaljs-sengaja-tetap-eager) |
+| `static/sw.js` | **21,6 KB** | — | Service worker: pre-cache shell (29 entri), **cache data read-only** (`hermes-data-v1`, 2 endpoint), SWR opt-in, fallback offline berlapis, `push`, `pushsubscriptionchange`, `notificationclick` |
+| `static/outbox.js` | **12,0 KB** | **4,2** | **Baru (P2.1)** — antrian kirim IndexedDB; flush dipicu halaman karena Safari tidak punya Background Sync |
+| `static/offline.html` | **15,2 KB** | 5,0 | **Baru (P2.1)** — shell offline read-only; membaca `hermes-data-v1` + antrian, nol request eksternal, nol dependensi bundel aplikasi |
+| `static/vendor/mermaid/10.9.3/` | 3,18 MB | 971 | **Baru (P2.3)** — lazy, tidak di-pre-cache |
+| `static/vendor/pdfjs/4.9.155/` | 1,64 MB | 487 | **Baru (P2.3)** — lazy; `.mjs` butuh entri `_STATIC_MIME` atau browser menolaknya tanpa pesan |
+| `static/manifest.json` | 1,2 KB | — | Manifest PWA — **belum punya `share_target`** ([P4.2](#p42--native-feel-diurutkan-menurut-apa-yang-benar-benar-terasa---selesai)) |
 | `tests/test_mobile_layout.py` | — | Regresi mobile statis (breakpoint, markup, overflow) |
 | `tests/browser_responsive.py` | — | **Baru (Fase 1.5)** — gerbang layout di browser sungguhan, 9 viewport |
 | `tests/test_breakpoint_contract.py` | — | **Baru (Fase 1.1)** — menyandingkan breakpoint CSS ↔ JS |
-| `tests/test_vendored_frontend_assets.py` | — | **Baru (Fase 1.3)** — melarang aset runtime dari CDN |
+| `tests/test_vendored_frontend_assets.py` | — | **Fase 1.3**, diperluas [P2.3](#p23--vendor-pdfjs--mermaid--hapus-jsdelivr-dari-csp---selesai) — larangan CDN **total** + verifikasi ulang setiap SRI hash terhadap disk |
+| `tests/test_offline_shell_and_outbox.py` | — | **Baru (P2.1)** — 31 test: kesepakatan `index.html` ↔ `SHELL_ASSETS`, batas cache API, SWR opt-in, shell offline, antrian kirim |
+| `tests/test_button_accessible_names.py` | — | **Baru (P2.2)** — 28 test: setiap `<button>` tanpa teks wajib punya nama yang bisa dibacakan (`data-tooltip` **tidak** dihitung), semantik modal, lantai live region, kartu approval |
 | `tests/test_mobile_feature_parity.py` | — | **Baru (Fase 2.1/2.2)** — kontrak keterjangkauan fitur di HP |
-| `static/vendor/prismjs/1.29.0/` | 570 KB | **Baru (Fase 1.3)** — Prism core, autoloader, 298 grammar, 2 tema |
-| `static/vendor/xterm/5.3.0/` | 287 KB | **Baru (Fase 1.3)** — xterm.js + CSS + addon fit/web-links |
+| `static/vendor/prismjs/1.29.0/` | 1,33 MB | Prism core + autoloader (5,6 KiB gz eager), 298 grammar (lazy), 2 tema |
+| `static/vendor/xterm/5.3.0/` | 300 KB | **68,2 KiB gzip dimuat eager di setiap page load** — target [P1.3](#p13---lazy-load-xterm-terminaljs-sengaja-tetap-eager) |
+| `static/vendor/katex/0.16.22/` | 1,43 MB | CSS-nya (3,5 KiB gz) eager; font & JS lazy |
+| `.github/workflows/browser-smoke.yml` | — | Menjalankan `browser_smoke.py` **dan** gerbang responsif 9 viewport pada tiap PR non-docs |
+| `tests/locale_contract.py` | — | Sumber kebenaran `PARTIAL_LOCALES` — satu entri: `id` |
 | `docs/UIUX-GUIDE.md` | — | Kebijakan desain, termasuk aturan responsif |
-| `docs/remote-access.md` | 75 baris | SSH tunnel, Tailscale, laporan komunitas ARM64 |
+| `docs/remote-access.md` | **75 baris** | SSH tunnel, Tailscale, ARM64. **Nol TLS / nginx / Caddy** — celah [P0.1](#p01---tulis-docsreverse-proxymd-nginx--caddy--tls--sse) |
+| `docs/reverse-proxy.md` | **belum ada** | [P0.1](#p01---tulis-docsreverse-proxymd-nginx--caddy--tls--sse) — prasyarat HTTPS untuk Web Push |
 
 ## Lampiran B — Cara Mereproduksi Pengukuran
 
@@ -1871,4 +3362,98 @@ HERMES_WEBUI_CHROMIUM=/path/ke/chromium python tests/browser_responsive.py
 #    Blokir egress lalu muat halaman: requestfailed harus 0 (sebelum Fase 1.3
 #    ada 7 kegagalan per halaman di setiap viewport).
 python -m pytest tests/test_vendored_frontend_assets.py -q
+```
+
+### B.1 — Angka payload §0.8 (basis anggaran P1.0)
+
+Ini yang menghasilkan tabel cold-load di §0.8. Daftar filenya sengaja ditulis
+eksplisit, bukan diambil dari glob: yang diukur adalah **apa yang benar-benar
+dirujuk `index.html`**, dan glob akan diam-diam menghitung file yatim.
+
+```bash
+python3 - <<'EOF'
+import gzip, os
+crit = ["static/i18n.js", "static/icons.js", "static/assistant_turn_anchors.js",
+        "static/ui.js", "static/workspace.js", "static/terminal.js",
+        "static/sessions.js", "static/commands.js", "static/messages.js",
+        "static/extension_settings.js", "static/panels.js", "static/onboarding.js",
+        "static/boot.js", "static/outline.js", "static/style.css",
+        "static/pwa-startup.js"]
+vend = ["static/vendor/prismjs/1.29.0/components/prism-core.min.js",
+        "static/vendor/prismjs/1.29.0/plugins/autoloader/prism-autoloader.min.js",
+        "static/vendor/xterm/5.3.0/xterm.js",
+        "static/vendor/xterm/5.3.0/xterm-addon-fit.js",
+        "static/vendor/xterm/5.3.0/xterm-addon-web-links.js",
+        "static/vendor/xterm/5.3.0/xterm.css",
+        "static/vendor/katex/0.16.22/katex.min.css",
+        "static/vendor/prismjs/1.29.0/themes/prism-tomorrow.min.css"]
+# compresslevel=6 matches _serve_static in api/routes.py — not the default 9.
+gz  = lambda p: len(gzip.compress(open(p, "rb").read(), 6))
+kib = lambda n: n / 1024
+for name, group in (("app js+css", crit), ("vendor eager", vend),
+                    ("index.html", ["static/index.html"])):
+    print(f"{name:14} raw={kib(sum(map(os.path.getsize, group))):9.1f} KiB"
+          f"  gz={kib(sum(map(gz, group))):9.1f} KiB")
+allf = crit + vend + ["static/index.html"]
+print(f"{'TOTAL COLD':14} raw={kib(sum(map(os.path.getsize, allf))):9.1f} KiB"
+      f"  gz={kib(sum(map(gz, allf))):9.1f} KiB")
+for f in sorted(allf, key=gz, reverse=True)[:8]:
+    print(f"  {f:52} gz={kib(gz(f)):8.1f} KiB")
+EOF
+```
+
+### B.2 — Cakupan `id` dan porsi CSS skin (§0.8 Temuan 2 & 3)
+
+```bash
+# Perkiraan jumlah key per locale — "id" harus muncul jauh di bawah yang lain.
+python3 - <<'EOF'
+import re
+lines = open("static/i18n.js", encoding="utf-8").read().split("\n")
+marks = [(i, re.match(r"^_lang:\s*'([^']+)'", l.strip()).group(1))
+         for i, l in enumerate(lines) if l.strip().startswith("_lang:")]
+marks.append((len(lines), None))
+for (start, code), (end, _) in zip(marks, marks[1:]):
+    block = "\n".join(lines[start:end])
+    n = len(re.findall(r"^\s{2,4}[A-Za-z_][A-Za-z0-9_]*\s*:", block, re.M))
+    print(f"{code:8} approx_keys={n}")
+EOF
+
+# Berapa banyak style.css yang hanya melayani skin non-default.
+python3 - <<'EOF'
+import re
+css = open("static/style.css", encoding="utf-8").read()
+def rules(text, off=0):
+    i = start = 0; out = []
+    while i < len(text):
+        if text[i] == "{":
+            d, j = 1, i + 1
+            while j < len(text) and d:
+                d += (text[j] == "{") - (text[j] == "}"); j += 1
+            out.append((start + off, j + off, text[start:i])); i = start = j
+        else:
+            i += 1
+    return out
+skin = 0
+for s, e, sel in rules(css):
+    if "data-skin" in sel:
+        skin += e - s
+    elif sel.strip().startswith(("@media", "@supports")):
+        b = css.index("{", s) + 1
+        skin += sum(e2 - s2 for s2, e2, sel2 in rules(css[b:e - 1], b) if "data-skin" in sel2)
+print(f"skin CSS: {skin} / {len(css)} byte = {skin / len(css) * 100:.1f}%")
+EOF
+```
+
+### B.3 — Yang tidak bisa diukur ulang di re-audit ini
+
+`tests/browser_responsive.py` dan `tests/browser_smoke.py` butuh Playwright +
+Chromium. Keduanya **tidak tersedia** di environment re-audit 2026-08-31, jadi
+seluruh klaim layout runtime di §0.2 dibawa maju **tanpa verifikasi ulang** di
+`f1a60e46`. Gerbangnya tetap berjalan di CI pada setiap PR non-docs
+(`.github/workflows/browser-smoke.yml`), yang berarti klaim itu masih ditegakkan
+— tapi oleh CI, bukan oleh dokumen ini. Untuk memverifikasinya sendiri:
+
+```bash
+pip install playwright && python -m playwright install --with-deps chromium
+python tests/browser_responsive.py
 ```

@@ -25,9 +25,16 @@ def test_messages_payloads_use_model_tied_provider_helper():
     assert "function _chatPayloadModelState" in messages_src
     assert "_modelProviderForSend(model)" in messages_src
 
-    chat_start_idx = messages_src.find("api('/api/chat/start'")
+    # The payload literal is built into `startPayloadForOutbox` just above the
+    # POST rather than inline in it, so the offline send queue can replay the
+    # exact bytes that were attempted. Read from the literal through the call.
+    payload_idx = messages_src.find("startPayloadForOutbox={")
+    assert payload_idx >= 0, (
+        "could not find the /api/chat/start payload literal in messages.js"
+    )
+    chat_start_idx = messages_src.find("api('/api/chat/start'", payload_idx)
     assert chat_start_idx >= 0, "could not find /api/chat/start POST in messages.js"
-    payload_block = messages_src[chat_start_idx:chat_start_idx + 500]
+    payload_block = messages_src[payload_idx:chat_start_idx + 200]
     assert "model:_modelState.model" in payload_block
     assert "model_provider:_modelState.model_provider" in payload_block
     assert "model_provider:S.session.model_provider||null" not in payload_block

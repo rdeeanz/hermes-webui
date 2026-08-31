@@ -69,7 +69,9 @@ def test_static_vendor_import_is_relative_to_current_mount():
     `/hermes/`. The `./` form satisfies both constraints.
     """
     src = read("static/index.html")
-    assert "import * as smd from './static/vendor/smd.min.js'" in src
+    # Prefix match: the URL carries ?v=__WEBUI_VERSION__ for the sw.js
+    # pre-cache. What matters here is the mount-relative `./` form.
+    assert "import * as smd from './static/vendor/smd.min.js" in src
     # Bare specifier — broken per ES module spec (#1849)
     assert "import * as smd from 'static/vendor/smd.min.js'" not in src
     # Root-absolute — breaks /hermes/ subpath mounts

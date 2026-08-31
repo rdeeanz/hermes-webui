@@ -12,6 +12,18 @@ const LOCALES = {
     offline_check_now: 'Check now',
     offline_checking: 'Checking…',
     offline_stream_waiting: 'Connection lost. Waiting to refresh…',
+    offline_send_queued: 'Offline — queued. This sends as soon as you are back online.',
+    a11y_agent_working: 'Assistant is working',
+    a11y_agent_finished: 'Assistant finished responding',
+    a11y_approval_pending: 'Approval required: {0}',
+    sidebar_drawer_label: 'Sessions and panels',
+    workspace_panel_label: 'Workspace',
+    outline_toggle: 'Outline',
+    ptr_pull: 'Pull to refresh',
+    ptr_release: 'Release to refresh',
+    share_received: 'Added what you shared to the composer.',
+    share_received_files_dropped: 'Shared text added. Files need the app open — try sharing again.',
+    workspace_add_title: 'Add space',
     _lang: 'en',
     _label: 'English',
     _speech: 'en-US',
@@ -1807,6 +1819,18 @@ const LOCALES = {
     offline_check_now: 'Verifica ora',
     offline_checking: 'Verifica in corso…',
     offline_stream_waiting: 'Connessione persa. In attesa di aggiornare…',
+    offline_send_queued: 'Offline — in coda. Verrà inviato appena torni online.',
+    a11y_agent_working: 'L’assistente sta lavorando',
+    a11y_agent_finished: 'L’assistente ha finito di rispondere',
+    a11y_approval_pending: 'Approvazione richiesta: {0}',
+    sidebar_drawer_label: 'Sessioni e pannelli',
+    workspace_panel_label: 'Spazio di lavoro',
+    outline_toggle: 'Struttura',
+    ptr_pull: 'Tira per aggiornare',
+    ptr_release: 'Rilascia per aggiornare',
+    share_received: 'Ho aggiunto ciò che hai condiviso al campo di testo.',
+    share_received_files_dropped: 'Testo condiviso aggiunto. Per i file l\'app deve essere aperta — riprova a condividere.',
+    workspace_add_title: 'Aggiungi spazio',
     _lang: 'it',
     _label: 'Italiano',
     _speech: 'it-IT',
@@ -3579,6 +3603,18 @@ const LOCALES = {
     offline_check_now: '今すぐ確認',
     offline_checking: '確認中…',
     offline_stream_waiting: '接続が切断されました。更新を待っています…',
+    offline_send_queued: 'オフライン — キューに追加しました。オンラインに戻るとすぐに送信されます。',
+    a11y_agent_working: 'アシスタントが処理中です',
+    a11y_agent_finished: 'アシスタントの応答が完了しました',
+    a11y_approval_pending: '承認が必要です: {0}',
+    sidebar_drawer_label: 'セッションとパネル',
+    workspace_panel_label: 'ワークスペース',
+    outline_toggle: 'アウトライン',
+    ptr_pull: '引っ張って更新',
+    ptr_release: '離して更新',
+    share_received: '共有された内容を入力欄に追加しました。',
+    share_received_files_dropped: '共有されたテキストを追加しました。ファイルはアプリを開いた状態で共有し直してください。',
+    workspace_add_title: 'スペースを追加',
     _lang: 'ja',
     _label: '日本語',
     _speech: 'ja-JP',
@@ -5356,6 +5392,18 @@ const LOCALES = {
     offline_check_now: 'Проверить сейчас',
     offline_checking: 'Проверка…',
     offline_stream_waiting: 'Соединение потеряно. Ожидаю обновления…',
+    offline_send_queued: 'Нет сети — сообщение в очереди. Оно отправится, как только связь вернётся.',
+    a11y_agent_working: 'Ассистент работает',
+    a11y_agent_finished: 'Ассистент закончил отвечать',
+    a11y_approval_pending: 'Требуется подтверждение: {0}',
+    sidebar_drawer_label: 'Сессии и панели',
+    workspace_panel_label: 'Рабочая область',
+    outline_toggle: 'Структура',
+    ptr_pull: 'Потяните, чтобы обновить',
+    ptr_release: 'Отпустите, чтобы обновить',
+    share_received: 'Добавил то, чем вы поделились, в поле ввода.',
+    share_received_files_dropped: 'Текст добавлен. Для файлов приложение должно быть открыто — попробуйте поделиться снова.',
+    workspace_add_title: 'Добавить пространство',
     _lang: 'ru',
     _label: 'Русский',
     _speech: 'ru-RU',
@@ -7107,6 +7155,18 @@ const LOCALES = {
     offline_check_now: 'Comprobar ahora',
     offline_checking: 'Comprobando…',
     offline_stream_waiting: 'Conexión perdida. Esperando para actualizar…',
+    offline_send_queued: 'Sin conexión — en cola. Se enviará en cuanto vuelvas a estar en línea.',
+    a11y_agent_working: 'El asistente está trabajando',
+    a11y_agent_finished: 'El asistente terminó de responder',
+    a11y_approval_pending: 'Se requiere aprobación: {0}',
+    sidebar_drawer_label: 'Sesiones y paneles',
+    workspace_panel_label: 'Espacio de trabajo',
+    outline_toggle: 'Esquema',
+    ptr_pull: 'Desliza para actualizar',
+    ptr_release: 'Suelta para actualizar',
+    share_received: 'Añadí lo que compartiste al campo de texto.',
+    share_received_files_dropped: 'Texto añadido. Los archivos necesitan la app abierta: vuelve a compartir.',
+    workspace_add_title: 'Añadir espacio',
     _lang: 'es',
     _label: 'Español',
     _speech: 'es-ES',
@@ -8825,6 +8885,18 @@ const LOCALES = {
     offline_check_now: 'Jetzt prüfen',
     offline_checking: 'Prüfe…',
     offline_stream_waiting: 'Verbindung verloren. Warte auf Aktualisierung…',
+    offline_send_queued: 'Offline — in der Warteschlange. Wird gesendet, sobald du wieder online bist.',
+    a11y_agent_working: 'Der Assistent arbeitet',
+    a11y_agent_finished: 'Der Assistent hat geantwortet',
+    a11y_approval_pending: 'Freigabe erforderlich: {0}',
+    sidebar_drawer_label: 'Sitzungen und Panels',
+    workspace_panel_label: 'Arbeitsbereich',
+    outline_toggle: 'Übersicht',
+    ptr_pull: 'Zum Aktualisieren ziehen',
+    ptr_release: 'Loslassen zum Aktualisieren',
+    share_received: 'Das Geteilte wurde ins Eingabefeld übernommen.',
+    share_received_files_dropped: 'Text übernommen. Für Dateien muss die App offen sein — bitte erneut teilen.',
+    workspace_add_title: 'Bereich hinzufügen',
     _lang: 'de',
     _label: 'Deutsch',
     _speech: 'de-DE',
@@ -10537,6 +10609,18 @@ const LOCALES = {
     offline_check_now: '立即检查',
     offline_checking: '正在检查…',
     offline_stream_waiting: '连接已断开。正在等待刷新…',
+    offline_send_queued: '离线 — 已加入队列。恢复联网后会自动发送。',
+    a11y_agent_working: '助手正在处理',
+    a11y_agent_finished: '助手已回复完成',
+    a11y_approval_pending: '需要批准：{0}',
+    sidebar_drawer_label: '会话与面板',
+    workspace_panel_label: '工作区',
+    outline_toggle: '大纲',
+    ptr_pull: '下拉刷新',
+    ptr_release: '松开即可刷新',
+    share_received: '已将分享的内容添加到输入框。',
+    share_received_files_dropped: '已添加分享的文本。文件需要应用处于打开状态 — 请重新分享。',
+    workspace_add_title: '添加空间',
     _lang: 'zh',
     _label: '\u7b80\u4f53\u4e2d\u6587',
     _speech: 'zh-CN',
@@ -12244,6 +12328,18 @@ const LOCALES = {
     offline_check_now: '立即檢查',
     offline_checking: '正在檢查…',
     offline_stream_waiting: '連線中斷。等待重新整理…',
+    offline_send_queued: '離線 — 已加入佇列。恢復連線後會自動傳送。',
+    a11y_agent_working: '助理正在處理',
+    a11y_agent_finished: '助理已回覆完成',
+    a11y_approval_pending: '需要核准：{0}',
+    sidebar_drawer_label: '工作階段與面板',
+    workspace_panel_label: '工作區',
+    outline_toggle: '大綱',
+    ptr_pull: '下拉重新整理',
+    ptr_release: '放開即可重新整理',
+    share_received: '已將分享的內容加入輸入框。',
+    share_received_files_dropped: '已加入分享的文字。檔案需要應用程式開啟 — 請重新分享。',
+    workspace_add_title: '新增空間',
     _lang: 'zh-Hant',
     _label: '繁體中文',
     _speech: 'zh-TW',
@@ -14018,6 +14114,17 @@ const LOCALES = {
     offline_check_now: 'Verificar agora',
     offline_checking: 'Verificando…',
     offline_stream_waiting: 'Conexão perdida. Aguardando para atualizar…',
+    offline_send_queued: 'Offline — na fila. Será enviado assim que você voltar a ficar online.',
+    a11y_agent_working: 'O assistente está trabalhando',
+    a11y_agent_finished: 'O assistente terminou de responder',
+    a11y_approval_pending: 'Aprovação necessária: {0}',
+    sidebar_drawer_label: 'Sessões e painéis',
+    workspace_panel_label: 'Espaço de trabalho',
+    outline_toggle: 'Estrutura',
+    ptr_pull: 'Arraste para atualizar',
+    ptr_release: 'Solte para atualizar',
+    share_received: 'Adicionei o que você compartilhou ao campo de texto.',
+    share_received_files_dropped: 'Texto adicionado. Arquivos exigem o app aberto — tente compartilhar de novo.',
     _lang: 'pt',
     _label: 'Português',
     _speech: 'pt-BR',
@@ -15609,6 +15716,18 @@ const LOCALES = {
     offline_check_now: '지금 확인',
     offline_checking: '확인 중…',
     offline_stream_waiting: '연결이 끊겼습니다. 새로고침을 기다리는 중…',
+    offline_send_queued: '오프라인 — 대기열에 추가했습니다. 다시 연결되면 전송됩니다.',
+    a11y_agent_working: '어시스턴트가 작업 중입니다',
+    a11y_agent_finished: '어시스턴트가 응답을 마쳤습니다',
+    a11y_approval_pending: '승인이 필요합니다: {0}',
+    sidebar_drawer_label: '세션 및 패널',
+    workspace_panel_label: '작업 공간',
+    outline_toggle: '개요',
+    ptr_pull: '당겨서 새로고침',
+    ptr_release: '놓으면 새로고침',
+    share_received: '공유한 내용을 입력창에 추가했습니다.',
+    share_received_files_dropped: '공유한 텍스트를 추가했습니다. 파일은 앱이 열려 있어야 합니다 — 다시 공유해 주세요.',
+    workspace_add_title: '공간 추가',
     _lang: 'ko',
     _label: '한국어',
     _speech: 'ko-KR',
@@ -17371,6 +17490,18 @@ const LOCALES = {
     offline_check_now: 'Vérifier maintenant',
     offline_checking: 'Vérification\u2026',
     offline_stream_waiting: 'Connexion perdue. En attente de rafraîchissement\u2026',
+    offline_send_queued: 'Hors ligne — en file d’attente. L’envoi se fera dès votre retour en ligne.',
+    a11y_agent_working: 'L’assistant travaille',
+    a11y_agent_finished: 'L’assistant a fini de répondre',
+    a11y_approval_pending: 'Approbation requise : {0}',
+    sidebar_drawer_label: 'Sessions et panneaux',
+    workspace_panel_label: 'Espace de travail',
+    outline_toggle: 'Plan',
+    ptr_pull: 'Tirer pour actualiser',
+    ptr_release: 'Relâcher pour actualiser',
+    share_received: 'J’ai ajouté ce que vous avez partagé dans le champ de saisie.',
+    share_received_files_dropped: 'Texte ajouté. Les fichiers nécessitent que l’app soit ouverte — repartagez.',
+    workspace_add_title: 'Ajouter un espace',
     _lang: 'fr',
     _label: 'Français',
     _speech: 'fr-FR',
@@ -20592,6 +20723,18 @@ const LOCALES = {
     offline_checking: 'Kontroluje se…',
     offline_network_detail: 'Hermes není právě dosažitelný z tohoto prohlížeče.',
     offline_stream_waiting: 'Spojení ztraceno. Čekám na obnovení…',
+    offline_send_queued: 'Offline — ve frontě. Odešle se, jakmile budete zpět online.',
+    a11y_agent_working: 'Asistent pracuje',
+    a11y_agent_finished: 'Asistent dokončil odpověď',
+    a11y_approval_pending: 'Vyžaduje se schválení: {0}',
+    sidebar_drawer_label: 'Sezení a panely',
+    workspace_panel_label: 'Pracovní prostor',
+    outline_toggle: 'Přehled',
+    ptr_pull: 'Přetažením obnovíte',
+    ptr_release: 'Uvolněním obnovíte',
+    share_received: 'Přidal jsem sdílený obsah do pole zprávy.',
+    share_received_files_dropped: 'Text přidán. Soubory vyžadují otevřenou aplikaci — zkuste sdílet znovu.',
+    workspace_add_title: 'Přidat prostor',
     offline_title: 'Spojení ztraceno',
     onboarding_complete: 'Onboarding dokončen!',
     onboarding_skip: 'Přeskočit instalaci',
@@ -20851,6 +20994,18 @@ const LOCALES = {
     offline_check_now: 'Şimdi kontrol et',
     offline_checking: 'Kontrol ediliyor\u2026',
     offline_stream_waiting: 'Bağlantı kesildi. Yenilenmesi bekleniyor\u2026',
+    offline_send_queued: 'Çevrimdışı — kuyruğa alındı. Yeniden çevrimiçi olduğunuzda gönderilecek.',
+    a11y_agent_working: 'Asistan çalışıyor',
+    a11y_agent_finished: 'Asistan yanıtı tamamladı',
+    a11y_approval_pending: 'Onay gerekiyor: {0}',
+    sidebar_drawer_label: 'Oturumlar ve paneller',
+    workspace_panel_label: 'Çalışma alanı',
+    outline_toggle: 'Ana hatlar',
+    ptr_pull: 'Yenilemek için çekin',
+    ptr_release: 'Yenilemek için bırakın',
+    share_received: 'Paylaştığınız içeriği yazma alanına ekledim.',
+    share_received_files_dropped: 'Metin eklendi. Dosyalar için uygulamanın açık olması gerekir — tekrar paylaşın.',
+    workspace_add_title: 'Alan ekle',
     _lang: 'tr',
     _label: 'Türkçe',
     _speech: 'tr-TR',
@@ -22614,6 +22769,18 @@ const LOCALES = {
     offline_check_now: 'Sprawdź teraz',
     offline_checking: 'Sprawdzanie…',
     offline_stream_waiting: 'Połączenie utracone. Oczekiwanie na odświeżenie…',
+    offline_send_queued: 'Offline — w kolejce. Wyśle się, gdy wrócisz online.',
+    a11y_agent_working: 'Asystent pracuje',
+    a11y_agent_finished: 'Asystent zakończył odpowiedź',
+    a11y_approval_pending: 'Wymagana zgoda: {0}',
+    sidebar_drawer_label: 'Sesje i panele',
+    workspace_panel_label: 'Obszar roboczy',
+    outline_toggle: 'Konspekt',
+    ptr_pull: 'Pociągnij, aby odświeżyć',
+    ptr_release: 'Puść, aby odświeżyć',
+    share_received: 'Dodałem udostępnioną treść do pola wiadomości.',
+    share_received_files_dropped: 'Tekst dodany. Pliki wymagają otwartej aplikacji — spróbuj udostępnić ponownie.',
+    workspace_add_title: 'Dodaj przestrzeń',
     _lang: 'pl',
     _label: 'Polski',
     _speech: 'pl-PL',
@@ -24413,6 +24580,18 @@ const LOCALES = {
     offline_check_now: 'Periksa sekarang',
     offline_checking: 'Memeriksa…',
     offline_stream_waiting: 'Koneksi terputus. Menunggu untuk menyegarkan…',
+    offline_send_queued: 'Offline — masuk antrian. Akan terkirim begitu Anda kembali online.',
+    a11y_agent_working: 'Asisten sedang bekerja',
+    a11y_agent_finished: 'Asisten selesai menjawab',
+    a11y_approval_pending: 'Perlu persetujuan: {0}',
+    sidebar_drawer_label: 'Sesi dan panel',
+    workspace_panel_label: 'Ruang kerja',
+    outline_toggle: 'Kerangka',
+    ptr_pull: 'Tarik untuk menyegarkan',
+    ptr_release: 'Lepas untuk menyegarkan',
+    share_received: 'Konten yang Anda bagikan sudah masuk ke kolom pesan.',
+    share_received_files_dropped: 'Teks berhasil ditambahkan. Berkas butuh aplikasi terbuka — coba bagikan lagi.',
+    workspace_add_title: 'Tambah ruang',
 
     // Common actions
     save: 'Simpan',
@@ -24581,6 +24760,18 @@ const LOCALES = {
     offline_check_now: 'Kiểm tra ngay',
     offline_checking: 'Đang kiểm tra…',
     offline_stream_waiting: 'Mất kết nối. Đang chờ làm mới…',
+    offline_send_queued: 'Ngoại tuyến — đã xếp hàng. Sẽ gửi ngay khi bạn có kết nối lại.',
+    a11y_agent_working: 'Trợ lý đang xử lý',
+    a11y_agent_finished: 'Trợ lý đã trả lời xong',
+    a11y_approval_pending: 'Cần phê duyệt: {0}',
+    sidebar_drawer_label: 'Phiên và bảng',
+    workspace_panel_label: 'Không gian làm việc',
+    outline_toggle: 'Dàn ý',
+    ptr_pull: 'Kéo để làm mới',
+    ptr_release: 'Thả để làm mới',
+    share_received: 'Đã thêm nội dung bạn chia sẻ vào ô nhập.',
+    share_received_files_dropped: 'Đã thêm văn bản. Tệp cần ứng dụng đang mở — hãy chia sẻ lại.',
+    workspace_add_title: 'Thêm không gian',
     _lang: 'vi',
     _label: 'Tiếng Việt',
     _speech: 'vi-VN',
@@ -26657,9 +26848,54 @@ function _i18nToolSummaryJoinCs(parts) {
 
 // Active locale — defaults to English; overridden by loadLocale() at boot.
 let _locale = LOCALES.en;
+// The code `_locale` corresponds to. Tracked separately because a bundle that
+// has not been fetched yet leaves `_locale` pointing at the English fallback
+// while the selection is already this code.
+let _localeCode = 'en';
+
+// ── The split seam ───────────────────────────────────────────────────────────
+// scripts/split_i18n.py replaces the line below with a real manifest listing
+// every locale, including the ones whose bundles are not loaded. It stays null
+// in this source file so that static/i18n.js still runs correctly on its own —
+// with every locale present, LOCALES itself is a complete manifest.
+//
+// Anything that needs to know a language EXISTS (resolving a tag, drawing the
+// picker) must go through knownLocaleCodes()/localeLabel(). Anything that needs
+// a language's TEXT reads LOCALES and copes with it being absent.
+const LOCALE_MANIFEST = null;
 
 /**
- * Resolve an incoming locale tag to a known LOCALES key.
+ * Every locale code the build knows about, loaded or not.
+ * @returns {string[]}
+ */
+function knownLocaleCodes() {
+  return Object.keys(LOCALE_MANIFEST || LOCALES);
+}
+
+/**
+ * Display name for a locale code, available before its bundle is fetched.
+ * @param {string} code
+ * @returns {string}
+ */
+function localeLabel(code) {
+  if (LOCALE_MANIFEST && LOCALE_MANIFEST[code]) return LOCALE_MANIFEST[code].label || code;
+  const bundle = LOCALES[code];
+  return (bundle && bundle._label) || code;
+}
+
+/**
+ * Speech-synthesis / <html lang> tag for a locale code, before it is fetched.
+ * @param {string} code
+ * @returns {string}
+ */
+function localeSpeechTag(code) {
+  if (LOCALE_MANIFEST && LOCALE_MANIFEST[code]) return LOCALE_MANIFEST[code].speech || code;
+  const bundle = LOCALES[code];
+  return (bundle && bundle._speech) || code;
+}
+
+/**
+ * Resolve an incoming locale tag to a known locale code.
  * Supports exact keys, case-insensitive matches, and a few common aliases
  * (e.g. zh-CN -> zh, zh-TW -> zh-Hant). Returns null when unresolved.
  * @param {string} lang
@@ -26669,26 +26905,26 @@ function resolveLocale(lang) {
   if (typeof lang !== 'string') return null;
   const raw = lang.trim();
   if (!raw) return null;
-  if (LOCALES[raw]) return raw;
+  const codes = knownLocaleCodes();
+  if (codes.includes(raw)) return raw;
 
   const lower = raw.toLowerCase().replace(/_/g, '-');
 
   // Case-insensitive direct match first.
-  const direct = Object.keys(LOCALES).find((k) => k.toLowerCase() === lower);
+  const direct = codes.find((k) => k.toLowerCase() === lower);
   if (direct) return direct;
 
   // Common Chinese variants.
   if (lower === 'zh' || lower.startsWith('zh-cn') || lower.startsWith('zh-sg') || lower.startsWith('zh-hans')) {
-    return LOCALES.zh ? 'zh' : null;
+    return codes.includes('zh') ? 'zh' : null;
   }
   if (lower.startsWith('zh-tw') || lower.startsWith('zh-hk') || lower.startsWith('zh-mo') || lower.startsWith('zh-hant')) {
-    return LOCALES['zh-Hant'] ? 'zh-Hant' : null;
+    return codes.includes('zh-Hant') ? 'zh-Hant' : null;
   }
 
   // Fallback to base language subtag (e.g. en-US -> en).
   const base = lower.split('-')[0];
-  const baseMatch = Object.keys(LOCALES).find((k) => k.toLowerCase() === base);
-  return baseMatch || null;
+  return codes.find((k) => k.toLowerCase() === base) || null;
 }
 
 /**
@@ -26724,16 +26960,89 @@ function t(key, ...args) {
   return val;
 }
 
+// In-flight and completed bundle fetches, so switching back and forth between
+// two languages does not re-download either of them.
+const _localeLoads = {};
+
+/**
+ * Fetch a locale bundle that the page did not load up front.
+ *
+ * Only reachable in the split build: the loader in index.html has already
+ * fetched the stored locale before first paint, so this covers the case of a
+ * reader CHANGING language in Settings. A brief moment of English before the
+ * bundle lands is acceptable there — the reader just clicked, and a repaint is
+ * expected. It would not be acceptable at boot, which is why boot does not
+ * come through here.
+ *
+ * @param {string} code
+ * @returns {Promise<boolean>} whether the bundle is available afterwards
+ */
+function loadLocaleBundle(code) {
+  if (LOCALES[code]) return Promise.resolve(true);
+  if (!knownLocaleCodes().includes(code)) return Promise.resolve(false);
+  if (_localeLoads[code]) return _localeLoads[code];
+
+  const promise = new Promise((resolve) => {
+    // Same cache-buster convention as every other asset, so the bundle gets the
+    // immutable far-future caching _serve_static grants fingerprinted URLs.
+    const version = (window.__HERMES_WEBUI_BUNDLE_VERSION__ || '');
+    const src = 'static/i18n/' + code + '.js' + (version ? '?v=' + encodeURIComponent(version) : '');
+    const href = new URL(src, document.baseURI || location.href).href;
+
+    // At boot the loader in index.html has usually already written a tag for
+    // this bundle that has not executed yet, so LOCALES[code] is still empty
+    // while the fetch is in flight. Adopting that pending tag instead of adding
+    // a second one avoids a duplicate request for every reader whose language
+    // is not English — on a cold cache both tags would really go to the network.
+    const pending = Array.from(document.querySelectorAll('script[src]'))
+      .find((s) => s.src === href);
+    if (pending) {
+      pending.addEventListener('load', () => resolve(!!LOCALES[code]));
+      pending.addEventListener('error', () => { delete _localeLoads[code]; resolve(false); });
+      return;
+    }
+
+    const el = document.createElement('script');
+    el.src = href;
+    el.async = false;
+    el.onload = () => resolve(!!LOCALES[code]);
+    // A failed fetch must not wedge the UI in a half-switched state: the
+    // caller keeps English, which is exactly what an untranslated key does
+    // anyway.
+    el.onerror = () => { delete _localeLoads[code]; resolve(false); };
+    document.head.appendChild(el);
+  });
+  _localeLoads[code] = promise;
+  return promise;
+}
+
 /**
  * Switch locale by language code (e.g. 'en', 'zh').
  * Persists to localStorage and updates the <html lang> attribute.
+ *
+ * Stays synchronous — five call sites depend on that. If the bundle is not
+ * loaded yet the selection still takes effect immediately (persisted, <html
+ * lang> updated, English text in the meantime) and the bundle is fetched in
+ * the background, re-stamping the DOM when it arrives.
+ *
  * @param {string} lang
  */
 function setLocale(lang) {
   const resolved = resolveLocale(lang) || 'en';
-  _locale = LOCALES[resolved];
+  _localeCode = resolved;
+  _locale = LOCALES[resolved] || LOCALES.en;
   try { localStorage.setItem('hermes-lang', resolved); } catch (_) {}
-  document.documentElement.lang = _locale._speech || resolved;
+  document.documentElement.lang = localeSpeechTag(resolved);
+
+  if (!LOCALES[resolved]) {
+    loadLocaleBundle(resolved).then((ok) => {
+      // Guard against a slow fetch landing after the reader picked something
+      // else — applying it then would silently override the newer choice.
+      if (!ok || _localeCode !== resolved) return;
+      _locale = LOCALES[resolved];
+      if (typeof applyLocaleToDOM === 'function') applyLocaleToDOM();
+    });
+  }
 }
 
 /**
@@ -26767,6 +27076,25 @@ function applyLocaleToDOM() {
       // co-fires alongside the fast custom tooltip.
       el.setAttribute('data-tooltip', val);
       if (el.hasAttribute('title')) el.removeAttribute('title');
+      // `data-tooltip` is a CSS tooltip. No screen reader reads it, and the
+      // branch above also strips the one attribute that WAS readable — so an
+      // icon-only button whose entire label lived in the tooltip ended up with
+      // no accessible name at all. That was 38 controls in index.html,
+      // including every left-rail panel tab and every panel-header action.
+      //
+      // Those 38 now carry an explicit aria-label + data-i18n-aria-label in the
+      // markup (enforced by tests/test_button_accessible_names.py). This is the
+      // safety net for tooltip buttons built in JS, which no static test sees:
+      // supply the name only when the element has none of its own, so it can
+      // never shadow a real label or a live text update.
+      if (
+        !el.getAttribute('aria-label')
+        && !el.getAttribute('aria-labelledby')
+        && !el.hasAttribute('data-i18n-aria-label')
+        && !(el.textContent || '').trim()
+      ) {
+        el.setAttribute('aria-label', val);
+      }
     } else {
       // Element opted out of custom tooltips — fall back to the native title.
       el.title = val;

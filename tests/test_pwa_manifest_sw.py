@@ -118,11 +118,18 @@ class TestServiceWorker:
         Network-first preserves offline fallback without hiding local fixes.
         """
         src = SW.read_text(encoding="utf-8")
-        assert "Shell assets: network-first with cache fallback" in src
+        marker = "// Shell assets: network-first with cache fallback"
+        assert marker in src
         assert "fetch(new Request(event.request, { cache: 'no-store' })).then((response)" in src
         assert "caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))" in src
         assert ".catch(() => caches.match(event.request)" in src
-        assert "if (cached) return cached;" not in src, (
+        # Scoped to the shell block, not the whole file. The API data cache
+        # (session list + transcripts) IS legitimately cache-fallback and uses
+        # exactly this phrasing; a whole-file scan would forbid it and lose the
+        # property this test actually cares about: SHELL CODE is never
+        # cache-first, or a hotfix can be shadowed by a stale bundle.
+        shell_block = src[src.find(marker):]
+        assert "if (cached) return cached;" not in shell_block, (
             "shell assets must not be cache-first; stale JS can survive hard refresh"
         )
 
@@ -258,7 +265,10 @@ class TestIndexHtmlIntegration:
             "panels.js",
             "commands.js",
             "icons.js",
-            "i18n.js",
+            # The i18n core, since the per-language split (scripts/split_i18n.py).
+            # The reader's own language bundle is intentionally not pre-cached —
+            # a service worker cannot read localStorage to know which one it is.
+            "i18n/core.js",
             "workspace.js",
             "terminal.js",
             "onboarding.js",

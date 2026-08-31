@@ -411,9 +411,152 @@ def test_service_worker_suppresses_a_push_for_a_page_already_on_screen():
     assert "alreadyVisible" in sw
 
 
-def test_approvals_require_interaction():
+def _require_interaction_expression():
+    """The body of the `requireInteraction:` option in sw.js.
+
+    Read as an expression rather than matched as a literal: the set of kinds
+    that interrupt is the contract, and it is expected to grow. Pinning the
+    exact source text made adding a kind look like a regression.
+    """
     sw = (REPO / "static" / "sw.js").read_text(encoding="utf-8")
-    assert "requireInteraction: payload.kind === 'approval'" in sw
+    start = sw.index("requireInteraction:")
+    # Ends at the option separator — either a `,` at paren depth 0 or the end
+    # of the options object.
+    depth = 0
+    for i in range(start, len(sw)):
+        ch = sw[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            return sw[start:i]
+    raise AssertionError("could not find the end of the requireInteraction option")
+
+
+@pytest.mark.parametrize("kind", ["approval", "crash", "cron_failed"])
+def test_work_stopping_notifications_require_interaction(kind):
+    """These three mean progress has halted and will not resume on its own.
+
+    An approval blocks the agent on a tap. A crash means the server died. A
+    failed cron job means scheduled work silently did not happen. A notification
+    that auto-dismisses while the phone is face-down is no notification at all.
+    """
+    assert f"'{kind}'" in _require_interaction_expression()
+
+
+def test_a_finished_turn_does_not_require_interaction():
+    """The counter-case: if everything interrupted, nothing would."""
+    assert "turn_complete" not in _require_interaction_expression()
+
+
+# ── Cron + crash triggers ────────────────────────────────────────────────────
+
+def _capture(push, monkeypatch):
+    """Collect payloads instead of sending them.
+
+    Via monkeypatch so the stub is undone at teardown: these helpers reach for
+    `notify_async` as a module global, so a raw assignment would stay patched
+    for every later test in the session.
+    """
+    sent = []
+    monkeypatch.setattr(
+        push, "notify_async", lambda payload, profile=None: sent.append(payload)
+    )
+    push.reset_crash_push_cooldown()
+    return sent
+
+
+def test_cron_push_reports_success_and_failure_differently(push, monkeypatch):
+    sent = _capture(push, monkeypatch)
+
+    push.notify_cron_complete({"id": "j1", "name": "Nightly digest"}, True)
+    push.notify_cron_complete({"id": "j2", "name": "Backup"}, False, "disk full")
+
+    assert "Nightly digest" in sent[0]["body"] and "failed" not in sent[0]["body"]
+    assert "Backup" in sent[1]["body"] and "failed" in sent[1]["body"]
+    assert "disk full" in sent[1]["body"], "the reason is the useful part"
+    # Only the failure interrupts; a job that worked can wait until you look.
+    assert sent[0]["kind"] == "cron" and sent[1]["kind"] == "cron_failed"
+
+
+def test_cron_push_tags_per_job_so_runs_do_not_stack(push, monkeypatch):
+    sent = _capture(push, monkeypatch)
+
+    push.notify_cron_complete({"id": "j1", "name": "Hourly"}, True)
+    push.notify_cron_complete({"id": "j1", "name": "Hourly"}, True)
+    push.notify_cron_complete({"id": "j2", "name": "Other"}, True)
+
+    assert sent[0]["tag"] == sent[1]["tag"], (
+        "an hourly job must replace its own notification, not stack 24 a day"
+    )
+    assert sent[2]["tag"] != sent[0]["tag"]
+    # And never collide with the approval / turn-complete namespaces.
+    assert all(p["tag"].startswith("hermes-cron-") for p in sent)
+
+
+def test_cron_push_survives_a_malformed_job(push, monkeypatch):
+    """Both call sites are in a `finally` — this must never raise."""
+    sent = _capture(push, monkeypatch)
+
+    push.notify_cron_complete({}, True)
+    push.notify_cron_complete(None, False, None)
+    assert len(sent) == 2 and all(p["body"] for p in sent)
+
+
+def test_crash_push_is_rate_limited(push, monkeypatch):
+    """An exception in a hot loop must not become a notification flood."""
+    sent = _capture(push, monkeypatch)
+
+    for _ in range(5):
+        push.notify_crash("thread worker-1", "ValueError", "boom")
+    assert len(sent) == 1, "only the first crash in the window notifies"
+
+    push.reset_crash_push_cooldown()
+    push.notify_crash("thread worker-1", "ValueError", "boom")
+    assert len(sent) == 2, "a later window notifies again"
+
+
+def test_crash_push_carries_the_location_and_type(push, monkeypatch):
+    sent = _capture(push, monkeypatch)
+
+    push.notify_crash("thread sse-writer", "KeyError", "'session_id'")
+    body = sent[0]["body"]
+    assert "sse-writer" in body and "KeyError" in body
+    assert sent[0]["tag"] == "hermes-crash", "must not collapse into a session tag"
+
+
+def test_crash_push_never_raises_even_if_delivery_explodes(push, monkeypatch):
+    """It runs inside an excepthook. A raising hook re-creates the silent-death
+    bug that api/crash_visibility.py exists to prevent."""
+    def boom(payload, profile=None):
+        raise RuntimeError("delivery is broken")
+
+    monkeypatch.setattr(push, "notify_async", boom)
+    push.reset_crash_push_cooldown()
+    push.notify_crash("the server", "SystemError", "")  # must not raise
+
+
+def test_cron_triggers_are_wired_at_both_completion_points():
+    """A cron job can finish on either path, and both are in a `finally`."""
+    routes = (REPO / "api" / "routes.py").read_text(encoding="utf-8")
+    profiles = (REPO / "api" / "profiles.py").read_text(encoding="utf-8")
+    assert "_push.notify_cron_complete(" in routes, "manual /api/crons/run path"
+    assert "_push.notify_cron_complete(" in profiles, "in-process scheduler path"
+    # Failure is the default, so an exception before the verdict is known is not
+    # reported to the operator as a successful run.
+    assert '"success": False' in routes
+    assert "job_ok, job_err = False" in profiles
+
+
+def test_crash_triggers_are_wired_to_both_excepthooks():
+    source = (REPO / "api" / "crash_visibility.py").read_text(encoding="utf-8")
+    assert source.count("_push_crash(") >= 3, "helper + both hooks"
+    # The main-thread hook runs as the interpreter tears down, where a daemon
+    # thread does not survive; without a bounded wait the push is killed
+    # mid-flight. The thread hook needs no wait — the process keeps running.
+    assert "wait_seconds=3.0" in source
+    assert "_push_crash(f\"thread {thread_name}\", exc_type, exc_value)" in source
 
 
 # ── Client ───────────────────────────────────────────────────────────────────

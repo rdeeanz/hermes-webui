@@ -239,8 +239,13 @@ def test_japanese_label_is_japanese_script():
     script (kanji/hiragana/katakana), not transliterated 'Japanese'.
     """
     src = read(REPO / "static" / "i18n.js")
-    # Find the ja locale's _label
-    m = re.search(r"\bja\s*:\s*\{[^{}]*?_label:\s*['\"]([^'\"]+)['\"]", src, re.DOTALL)
+    # Use the block extractor rather than an inline regex. The previous pattern
+    # was `ja\s*:\s*\{[^{}]*?_label:` — it relied on there being NO brace
+    # between `ja: {` and `_label:`, which stopped being true the moment a key
+    # above `_label` used a `{0}` interpolation placeholder. The extractor scans
+    # for the matching close brace, so key order and placeholders are irrelevant.
+    block = extract_locale_block(src, "ja")
+    m = re.search(r"_label:\s*['\"]([^'\"]+)['\"]", block)
     assert m, "ja locale _label not found"
     label = m.group(1)
     # CJK Unified Ideographs (kanji) U+4E00–U+9FFF

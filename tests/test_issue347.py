@@ -222,7 +222,20 @@ def test_mermaid_render_failure_removes_temporary_error_dom():
     """Failed Mermaid renders must not leave Mermaid's body-level syntax-error SVG visible."""
     fn_start = UI_JS.find('function renderMermaidBlocks')
     assert fn_start != -1, 'renderMermaidBlocks() function not found in ui.js'
-    fn = UI_JS[fn_start:fn_start + 2200]
+    # Brace-match the function instead of taking a fixed 2200-character window.
+    # The window was already only just long enough: a few added comment lines
+    # pushed the second cleanup site past the cutoff and the test failed with
+    # "cleanup must run after both renders" while both were present.
+    depth, end = 0, fn_start
+    for i in range(UI_JS.index('{', fn_start), len(UI_JS)):
+        if UI_JS[i] == '{':
+            depth += 1
+        elif UI_JS[i] == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    fn = UI_JS[fn_start:end]
     cleanup = "const tmp=document.getElementById('d'+id);\n      if(tmp) tmp.remove();"
     assert cleanup in fn, (
         "renderMermaidBlocks() must remove Mermaid's temporary d<id> container; "

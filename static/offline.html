@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hermes — Offline</title>
+<!--
+  The offline shell.
+
+  This page is only reached when the cached app shell ('./') is unavailable — a
+  first launch with no network, a PWA opened from a home-screen shortcut before
+  the app was ever loaded, or storage eviction. When './' IS cached the service
+  worker serves the real app instead, which boots against the same data cache
+  this page reads and is strictly better.
+
+  It replaced a literal string: '<h2>You are offline</h2>'. That string told the
+  reader nothing they did not already know and showed them nothing they could
+  use. This renders what is actually on the device: the cached session list, the
+  last transcript read, and anything sitting in the send queue.
+
+  Constraints, all deliberate:
+    - no external requests of any kind (it is the page you get when there is no
+      network), so all CSS and JS is inline and there are no images
+    - READ ONLY. It cannot send, rename, delete, or approve. Every one of those
+      needs a server, and a control that silently does nothing is worse than no
+      control
+    - no dependency on the app's own modules, which may not be cached
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #16181c;
+    --surface: #1e2126;
+    --surface-hover: #262a31;
+    --border: #2f343c;
+    --text: #e4e7eb;
+    --muted: #9aa3af;
+    --accent: #6da2e0;
+    --warn-bg: #2a2418;
+    --warn-border: #4d4020;
+    --warn-text: #e8c97a;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --surface-hover: #eef0f4;
+      --border: #d9dde3;
+      --text: #1b1f24;
+      --muted: #5c6673;
+      --accent: #2f6fb0;
+      --warn-bg: #fdf6e3;
+      --warn-border: #e6d9a8;
+      --warn-text: #7a6320;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    -webkit-text-size-adjust: 100%;
+  }
+  main { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.25rem; margin: 0 0 4px; }
+  h2 { font-size: 0.95rem; margin: 28px 0 10px; color: var(--muted); font-weight: 600; }
+  p { margin: 0 0 12px; }
+  .lede { color: var(--muted); margin-bottom: 20px; }
+
+  .banner {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--warn-bg); border: 1px solid var(--warn-border);
+    color: var(--warn-text);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;
+    font-size: 0.9rem;
+  }
+  .dot {
+    flex: none; width: 9px; height: 9px; border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* 44px minimum touch target — the same floor the app's own controls use. */
+  button {
+    font: inherit; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 9px; padding: 11px 16px; min-height: 44px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--surface-hover); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button[aria-pressed="true"] { border-color: var(--accent); }
+
+  ul { list-style: none; margin: 0; padding: 0; }
+  li + li { margin-top: 6px; }
+  .row {
+    width: 100%; text-align: left; display: block;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 11px 14px; min-height: 44px;
+  }
+  .row-title { font-weight: 500; display: block; }
+  .row-meta { color: var(--muted); font-size: 0.8rem; margin-top: 2px; display: block; }
+  .empty { color: var(--muted); font-style: italic; }
+
+  .transcript {
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); padding: 4px 14px 14px;
+    margin-top: 10px;
+  }
+  .turn { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .turn:last-child { border-bottom: 0; }
+  .turn-role {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); margin-bottom: 5px;
+  }
+  .turn-body {
+    white-space: pre-wrap; overflow-wrap: anywhere;
+    font-size: 0.92rem; margin: 0;
+    font-family: inherit;
+  }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="banner" role="status">
+    <span class="dot" aria-hidden="true"></span>
+    <span id="statusText">Offline — showing what is stored on this device.</span>
+  </div>
+
+  <h1>Hermes</h1>
+  <p class="lede">
+    Read-only. Nothing on this page can send, rename, or approve anything —
+    all of that needs the server.
+  </p>
+
+  <div class="actions">
+    <button type="button" id="retry">Try to reconnect</button>
+  </div>
+
+  <h2 id="queueHeading">Waiting to send</h2>
+  <div id="queue" aria-labelledby="queueHeading"><p class="empty">Nothing queued.</p></div>
+
+  <h2 id="sessionsHeading">Cached sessions</h2>
+  <div id="sessions" aria-labelledby="sessionsHeading"><p class="empty">Loading…</p></div>
+
+  <h2 id="transcriptHeading">Last transcript read</h2>
+  <div id="transcript" aria-labelledby="transcriptHeading"><p class="empty">Loading…</p></div>
+
+  <!-- Announces the outcome of loading, which is otherwise only visible. -->
+  <p class="visually-hidden" role="status" aria-live="polite" id="liveRegion"></p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var DATA_CACHE = 'hermes-data-v1';
+  var OUTBOX_DB = 'hermes-outbox';
+  var OUTBOX_STORE = 'sends';
+  var MAX_TURNS = 40;
+
+  function $(id) { return document.getElementById(id); }
+
+  function announce(text) {
+    var region = $('liveRegion');
+    if (region) region.textContent = text;
+  }
+
+  function setEmpty(el, text) {
+    el.textContent = '';
+    var p = document.createElement('p');
+    p.className = 'empty';
+    p.textContent = text;
+    el.appendChild(p);
+  }
+
+  function relativeTime(ms) {
+    if (!ms) return '';
+    var delta = Math.max(0, Date.now() - ms);
+    var mins = Math.round(delta / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + ' min ago';
+    var hours = Math.round(mins / 60);
+    if (hours < 24) return hours + ' h ago';
+    return Math.round(hours / 24) + ' d ago';
+  }
+
+  // ── The data cache the service worker fills ────────────────────────────────
+  //
+  // Read by iterating keys rather than by constructing a URL: the session-list
+  // request carries a query string built from the reader's sidebar filters, so
+  // the exact URL is not knowable from here. Whichever entry is present is the
+  // one that was last served.
+  function readCachedJson(match) {
+    if (!('caches' in window)) return Promise.resolve(null);
+    return caches.open(DATA_CACHE).then(function (cache) {
+      return cache.keys().then(function (requests) {
+        var hit = null;
+        for (var i = 0; i < requests.length; i++) {
+          var path = '';
+          try { path = new URL(requests[i].url).pathname; } catch (_e) { continue; }
+          if (match(path, requests[i].url)) hit = requests[i];
+        }
+        if (!hit) return null;
+        return cache.match(hit).then(function (response) {
+          if (!response) return null;
+          return response.json().catch(function () { return null; });
+        });
+      });
+    }).catch(function () { return null; });
+  }
+
+  function loadSessions() {
+    var el = $('sessions');
+    return readCachedJson(function (path) { return /(?:^|\/)api\/sessions$/.test(path); })
+      .then(function (data) {
+        var rows = (data && (data.sessions || data.items)) || [];
+        if (!Array.isArray(rows) || !rows.length) {
+          setEmpty(el, 'No session list is cached on this device yet.');
+          return 0;
+        }
+        var list = document.createElement('ul');
+        rows.slice(0, 50).forEach(function (row) {
+          var li = document.createElement('li');
+          var box = document.createElement('div');
+          box.className = 'row';
+          var title = document.createElement('span');
+          title.className = 'row-title';
+          title.textContent = row.title || row.session_id || 'Untitled';
+          box.appendChild(title);
+          var meta = document.createElement('span');
+          meta.className = 'row-meta';
+          var bits = [];
+          if (row.message_count != null) bits.push(row.message_count + ' messages');
+          var stamp = Number(row.updated_at || row.created_at || 0);
+          if (stamp) bits.push(relativeTime(stamp < 1e12 ? stamp * 1000 : stamp));
+          meta.textContent = bits.join(' · ');
+          box.appendChild(meta);
+          li.appendChild(box);
+          list.appendChild(li);
+        });
+        el.textContent = '';
+        el.appendChild(list);
+        return rows.length;
+      })
+      .catch(function () {
+        setEmpty(el, 'No session list is cached on this device yet.');
+        return 0;
+      });
+  }
+
+  function loadTranscript() {
+    var el = $('transcript');
+    return readCachedJson(function (path) { return /(?:^|\/)api\/session$/.test(path); })
+      .then(function (data) {
+        var messages = (data && (data.messages || (data.session && data.session.messages))) || [];
+        if (!Array.isArray(messages) || !messages.length) {
+          setEmpty(el, 'No transcript is cached on this device yet.');
+          return 0;
+        }
+        var wrap = document.createElement('div');
+        wrap.className = 'transcript';
+        // Tail, not head: the end of a conversation is the part someone offline
+        // is trying to re-read.
+        messages.slice(-MAX_TURNS).forEach(function (msg) {
+          var turn = document.createElement('div');
+          turn.className = 'turn';
+          var role = document.createElement('div');
+          role.className = 'turn-role';
+          role.textContent = String(msg.role || 'message');
+          turn.appendChild(role);
+          var body = document.createElement('p');
+          body.className = 'turn-body';
+          // textContent, never innerHTML: this renders transcript content, and
+          // the markdown/HTML pipeline the app uses is not available here.
+          var content = msg.content;
+          if (Array.isArray(content)) {
+            content = content.map(function (part) {
+              if (typeof part === 'string') return part;
+              return (part && (part.text || part.content)) || '';
+            }).join('\n');
+          }
+          body.textContent = String(content == null ? '' : content);
+          turn.appendChild(body);
+          wrap.appendChild(turn);
+        });
+        el.textContent = '';
+        if (messages.length > MAX_TURNS) {
+          var note = document.createElement('p');
+          note.className = 'empty';
+          note.textContent = 'Showing the last ' + MAX_TURNS + ' of ' + messages.length + ' messages.';
+          el.appendChild(note);
+        }
+        el.appendChild(wrap);
+        return messages.length;
+      })
+      .catch(function () {
+        setEmpty(el, 'No transcript is cached on this device yet.');
+        return 0;
+      });
+  }
+
+  // ── The send queue ─────────────────────────────────────────────────────────
+  //
+  // Read-only view of the same IndexedDB store static/outbox.js writes. This
+  // page never flushes it: flushing needs the network, and the app itself does
+  // it on `online`. Showing the queue matters anyway — it is the answer to
+  // "did my message get lost?".
+  function loadQueue() {
+    var el = $('queue');
+    return new Promise(function (resolve) {
+      if (typeof indexedDB === 'undefined') { resolve([]); return; }
+      var req;
+      try { req = indexedDB.open(OUTBOX_DB); } catch (_e) { resolve([]); return; }
+      req.onerror = function () { resolve([]); };
+      req.onblocked = function () { resolve([]); };
+      req.onupgradeneeded = function () {
+        // The store does not exist yet, which means nothing was ever queued.
+        // Abort so this read does not create an empty database.
+        try { req.transaction.abort(); } catch (_e) { }
+        resolve([]);
+      };
+      req.onsuccess = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(OUTBOX_STORE)) { resolve([]); return; }
+        try {
+          var tx = db.transaction(OUTBOX_STORE, 'readonly');
+          var all = tx.objectStore(OUTBOX_STORE).getAll();
+          all.onsuccess = function () { resolve(all.result || []); };
+          all.onerror = function () { resolve([]); };
+        } catch (_e) { resolve([]); }
+      };
+    }).then(function (entries) {
+      if (!entries.length) {
+        setEmpty(el, 'Nothing queued.');
+        return 0;
+      }
+      entries.sort(function (a, b) { return (a.queued_at || 0) - (b.queued_at || 0); });
+      var list = document.createElement('ul');
+      entries.forEach(function (entry) {
+        var li = document.createElement('li');
+        var box = document.createElement('div');
+        box.className = 'row';
+        var title = document.createElement('span');
+        title.className = 'row-title';
+        title.textContent = entry.display_text || '(message)';
+        box.appendChild(title);
+        var meta = document.createElement('span');
+        meta.className = 'row-meta';
+        meta.textContent = 'queued ' + relativeTime(entry.queued_at)
+          + ' · sends automatically when you are back online';
+        box.appendChild(meta);
+        li.appendChild(box);
+        list.appendChild(li);
+      });
+      el.textContent = '';
+      el.appendChild(list);
+      return entries.length;
+    });
+  }
+
+  $('retry').addEventListener('click', function () {
+    announce('Reconnecting…');
+    location.reload();
+  });
+
+  // The browser telling us it is back does not mean the server is reachable,
+  // so this reloads and lets the service worker's network-first navigation
+  // decide. If it is still down, we land right back here.
+  window.addEventListener('online', function () { location.reload(); });
+
+  Promise.all([loadQueue(), loadSessions(), loadTranscript()]).then(function (counts) {
+    var queued = counts[0], sessions = counts[1], turns = counts[2];
+    if (!queued && !sessions && !turns) {
+      $('statusText').textContent =
+        'Offline, and nothing is stored on this device yet. Reconnect once and the app will work offline afterwards.';
+      announce('Offline. Nothing is cached on this device yet.');
+      return;
+    }
+    announce(
+      'Offline. ' + sessions + ' cached sessions, ' + turns + ' cached messages, '
+      + queued + ' waiting to send.'
+    );
+  });
+})();
+</script>
+</body>
+</html>

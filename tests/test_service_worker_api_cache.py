@@ -4,12 +4,48 @@ The WebUI can be served at /hermes/. In that deployment API requests look like
 /hermes/api/sessions, not /api/sessions. The service worker must treat those as
 network-only; otherwise cache-first handling can serve a stale sidebar session
 list until the browser cache/service-worker cache is cleared.
+
+SCOPE CHANGE
+  "No API response is ever cached" was the rule when this file was written, and
+  it was also why the offline shell had nothing to show: a complete app shell
+  with no data renders an empty sidebar and an empty chat.
+
+  Exactly two pure-read endpoints are cached now — GET …/api/sessions and
+  GET …/api/session — in a separate `hermes-data-v1` cache, and the contracts
+  around that live in tests/test_offline_shell_and_outbox.py. The rule this file
+  still enforces is the boundary: EVERY OTHER API path, plus /stream and
+  /health, is network-only under both root and subpath mounts.
 """
+import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SW_SRC = (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
+
+
+def _code_only(src: str) -> str:
+    """Drop whole-line comments.
+
+    Several assertions here ban a substring, and sw.js now explains in prose why
+    it does the thing being banned. Scanning raw text would fail on the
+    explanation and push someone to delete it rather than keep the property.
+    """
+    out, in_block = [], False
+    for line in src.splitlines():
+        s = line.strip()
+        if in_block:
+            if "*/" in s:
+                in_block = False
+            continue
+        if s.startswith("/*"):
+            if "*/" not in s:
+                in_block = True
+            continue
+        if s.startswith("//") or s.startswith("*"):
+            continue
+        out.append(line)
+    return "\n".join(out)
 
 
 def test_service_worker_excludes_subpath_mounted_api_routes_from_cache():
@@ -26,9 +62,38 @@ def test_service_worker_excludes_subpath_mounted_health_routes_from_cache():
     )
 
 
-def test_service_worker_documents_api_routes_are_never_cached():
-    assert "API and streaming endpoints" in SW_SRC
+def test_service_worker_documents_which_api_routes_bypass_the_cache():
+    assert "Every other API and streaming endpoint" in SW_SRC
     assert "always go to network" in SW_SRC
+
+
+def test_only_the_two_named_read_endpoints_are_ever_answered_from_cache():
+    """The boundary, stated as code rather than as a comment.
+
+    A third endpoint appearing here would be a real decision — it means shipping
+    someone a stale answer — so it should not be possible to add one by accident.
+    """
+    code = _code_only(SW_SRC)
+    patterns = re.findall(r"^const (API_\w+_RE) = (/.*/);$", code, re.MULTILINE)
+    assert sorted(name for name, _ in patterns) == [
+        "API_SESSION_DETAIL_RE",
+        "API_SESSION_LIST_RE",
+    ], f"the set of cached API endpoints changed: {patterns}"
+    for _name, pattern in patterns:
+        assert pattern.endswith("$/"), (
+            f"{pattern} must be anchored to the end of the path, or it also "
+            f"matches the SSE siblings (/api/sessions/events, "
+            f"/api/sessions/gateway/stream) and hands an EventSource a cached body"
+        )
+
+
+def test_a_cached_api_response_is_only_ever_served_for_a_get():
+    code = _code_only(SW_SRC)
+    dispatch = code[code.index("API_SESSION_LIST_RE.test") - 400: code.index("API_SESSION_LIST_RE.test")]
+    assert "method === 'GET'" in dispatch, (
+        "the cached-endpoint branch must be gated on GET; a cached response for a "
+        "POST would silently swallow a write"
+    )
 
 
 def test_service_worker_does_not_intercept_its_own_script():
@@ -54,6 +119,7 @@ def test_service_worker_uses_network_first_for_page_navigation():
 def test_service_worker_does_not_precache_page_shell_under_auth():
     """Do not cache './' during install; it may be the authenticated app or login redirect."""
     shell_block = SW_SRC[SW_SRC.find("const SHELL_ASSETS"):SW_SRC.find("];", SW_SRC.find("const SHELL_ASSETS"))]
+    shell_block = _code_only(shell_block)
     assert "'./'" not in shell_block and '"./"' not in shell_block, (
         "pre-caching './' can serve a stale authenticated app shell while logged out; "
         "navigation should populate shell cache only after a successful non-redirect network load"

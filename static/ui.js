@@ -6213,25 +6213,71 @@ if(typeof window!=='undefined'){
   window._resetScrollDirectionTracker=_resetScrollDirectionTracker;
   window._resetStreamScrollFollow=_resetStreamScrollFollow;
 }
-/* ── Pull-to-refresh for PWA standalone (Android) ── */
-(function(){
-  if(typeof document==='undefined') return;
-  const isStandalone=window.navigator?.standalone||matchMedia('(display-mode:standalone),(display-mode:fullscreen)').matches;
-  if(!isStandalone) return;
-  const el=document.getElementById('messages');
-  if(!el) return;
+/* ── Pull-to-refresh ─────────────────────────────────────────────────────────
+ *
+ * One implementation, two scrollers. It began as a single anonymous IIFE bound
+ * to #messages; the roadmap asked for it on the SESSION LIST as well, and a
+ * second copy of a 60-line gesture handler is how two gestures end up behaving
+ * differently on the same screen. So: a factory, called twice.
+ *
+ * The gesture rules are the load-bearing part:
+ *   - only starts at scrollTop 0, so a downward drag inside a scrolled list
+ *     scrolls the list instead of fighting it for the gesture,
+ *   - preventDefault only past 30% of the threshold, which leaves short drags
+ *     to the browser and avoids stealing a scroll that was never a pull,
+ *   - `overscroll-behavior-y: contain` on both scrollers (already in style.css)
+ *     is what stops the pull chaining into the browser's own refresh.
+ */
+function _attachPullToRefresh(el, opts){
+  if(!el||el._hermesPtrAttached) return null;
+  opts=opts||{};
+  const onRefresh=typeof opts.onRefresh==='function'?opts.onRefresh:null;
+  if(!onRefresh) return null;
+  el._hermesPtrAttached=true;
+
+  const THRESHOLD=opts.threshold||80;
   let _ptrState=0; // 0=idle, 1=pulling, 2=ready
   let _ptrStartY=0;
   let _ptrCurrentY=0;
-  const THRESHOLD=80;
   let _indicator=null;
+  let _buzzed=false;
+
+  // Named _ptrLabel, not _label: boot.js already has a closure-scoped _label in
+  // the drawer/slide-over a11y module. Neither is global, so there is no runtime
+  // clash — but every file here shares one global scope, and
+  // test_no_duplicate_function_definitions is right not to distinguish. A reader
+  // scanning for `function _label` cannot either.
+  function _ptrLabel(key,fallback){
+    if(typeof t==='function'){
+      const val=t(key);
+      if(val&&val!==key) return val;
+    }
+    return fallback;
+  }
+
   function _ptrCreateIndicator(){
     if(_indicator) return;
     _indicator=document.createElement('div');
     _indicator.className='pull-to-refresh-indicator';
-    _indicator.innerHTML='<span class="ptr-icon">↓</span> <span class="ptr-text">Pull to refresh</span>';
-    el.parentNode.insertBefore(_indicator,el);
+    // Built with DOM calls rather than innerHTML because the labels are
+    // translated strings, and one of the 16 bundles containing an apostrophe or
+    // an angle bracket should not be able to inject markup here.
+    const icon=document.createElement('span');
+    icon.className='ptr-icon';
+    icon.setAttribute('aria-hidden','true');
+    icon.textContent='\u2193';
+    const text=document.createElement('span');
+    text.className='ptr-text';
+    _indicator.appendChild(icon);
+    _indicator.appendChild(document.createTextNode(' '));
+    _indicator.appendChild(text);
+    // Announced, not just drawn: a screen-reader user gets no feedback from a
+    // rotating arrow.
+    _indicator.setAttribute('role','status');
+    _indicator.setAttribute('aria-live','polite');
+    (opts.container||el.parentNode).insertBefore(_indicator,el);
   }
+
   function _ptrUpdate(progress){
     _ptrCreateIndicator();
     const pulling=progress<1;
@@ -6239,21 +6285,32 @@ if(typeof window!=='undefined'){
     const icon=_indicator.querySelector('.ptr-icon');
     const text=_indicator.querySelector('.ptr-text');
     if(icon) icon.classList.toggle('ready',!pulling);
-    if(text) text.textContent=pulling?'Pull to refresh':'Release to refresh';
+    if(text) text.textContent=pulling
+      ? _ptrLabel('ptr_pull','Pull to refresh')
+      : _ptrLabel('ptr_release','Release to refresh');
+    // One buzz at the moment it arms — the haptic equivalent of the arrow
+    // flipping, and the thing that lets you feel the threshold without looking.
+    if(!pulling&&!_buzzed){
+      _buzzed=true;
+      if(typeof window!=='undefined'&&window.HermesNative) window.HermesNative.haptic('tap');
+    }
   }
+
   function _ptrReset(){
     _ptrState=0;
     _ptrStartY=0;
     _ptrCurrentY=0;
+    _buzzed=false;
     if(_indicator) _indicator.classList.remove('active');
   }
+
   el.addEventListener('touchstart',function(e){
     if(el.scrollTop>0||_ptrState!==0) return;
     _ptrStartY=e.touches[0].clientY;
     _ptrState=1;
   },{passive:true});
   el.addEventListener('touchmove',function(e){
-    if(_ptrState!==1) return;
+    if(_ptrState!==1&&_ptrState!==2) return;
     _ptrCurrentY=e.touches[0].clientY;
     const pull=_ptrCurrentY-_ptrStartY;
     if(pull<0){ _ptrReset(); return; }
@@ -6267,20 +6324,51 @@ if(typeof window!=='undefined'){
     const progress=Math.min(pull/THRESHOLD,1);
     _ptrUpdate(progress);
     _ptrState=progress>=1?2:1;
-    if(progress>0.3) e.preventDefault();
+    if(progress>0.3&&e.cancelable) e.preventDefault();
   },{passive:false});
   el.addEventListener('touchend',function(){
     if(_ptrState===2){
-      if(typeof window.refreshSessionList==='function'){
-        Promise.resolve(window.refreshSessionList('pull', {force:true, refreshActive:true})).catch(()=>{}).finally(_ptrReset);
-      }else{
-        window.location.reload();
-      }
+      if(typeof window!=='undefined'&&window.HermesNative) window.HermesNative.haptic('confirm');
+      Promise.resolve().then(onRefresh).catch(()=>{}).finally(_ptrReset);
       return;
     }
     _ptrReset();
   },{passive:true});
   el.addEventListener('touchcancel',_ptrReset,{passive:true});
+  return _ptrReset;
+}
+if(typeof window!=='undefined') window._attachPullToRefresh=_attachPullToRefresh;
+
+(function(){
+  if(typeof document==='undefined') return;
+
+  // The session list, at every viewport. This is the surface the roadmap asked
+  // for and the one where the gesture is most expected — a list of
+  // conversations that a background agent keeps changing.
+  //
+  // Not standalone-gated: pulling a list to refresh it is an ordinary mobile
+  // idiom in a browser tab too, and `overscroll-behavior-y:contain` on
+  // .session-list already prevents it from chaining into the browser's refresh.
+  _attachPullToRefresh(document.getElementById('sessionList'),{
+    onRefresh:()=>(typeof window.refreshSessionList==='function')
+      ? window.refreshSessionList('pull',{force:true,refreshActive:true})
+      : undefined,
+  });
+
+  // The transcript scroller keeps its original standalone-only gate. In a
+  // browser tab the native pull-to-refresh is right there in the chrome, and
+  // two competing refresh gestures on one scroller is worse than one.
+  const isStandalone=window.navigator?.standalone||matchMedia('(display-mode:standalone),(display-mode:fullscreen)').matches;
+  if(!isStandalone) return;
+  _attachPullToRefresh(document.getElementById('messages'),{
+    onRefresh:()=>{
+      if(typeof window.refreshSessionList==='function'){
+        return window.refreshSessionList('pull',{force:true,refreshActive:true});
+      }
+      window.location.reload();
+      return undefined;
+    },
+  });
 })();
 (function(){
   const el=document.getElementById('messages');
@@ -8353,8 +8441,34 @@ async function handleComposerPrimaryAction(){
   await send();
 }
 
+// Streaming, announced once per transition rather than once per token.
+//
+// Sighted readers get the spinner, the activity line and the text arriving in
+// the pane. A screen-reader user got none of it: the assistant's reply is
+// appended to a region with no live semantics (deliberately — a live transcript
+// would read every partial token aloud and be unusable), so there was no signal
+// that a turn had started, and no signal that it had finished.
+//
+// Two announcements per turn is the whole feature. HermesA11y.announce()
+// enforces the floor between utterances and drops repeats, so this stays quiet
+// even when setBusy is called several times in a row during one turn.
+function _announceBusyTransition(busy){
+  const a11y=(typeof window!=='undefined')?window.HermesA11y:null;
+  if(!a11y||typeof a11y.announce!=='function') return;
+  const key=busy?'a11y_agent_working':'a11y_agent_finished';
+  const fallback=busy?'Assistant is working':'Assistant finished responding';
+  let text=fallback;
+  if(typeof t==='function'){
+    const val=t(key);
+    if(val&&val!==key) text=val;
+  }
+  a11y.announce(text);
+}
+
 function setBusy(v){
+  const wasBusy=!!S.busy;
   S.busy=v;
+  if(wasBusy!==!!v) _announceBusyTransition(!!v);
   updateSendBtn();
   if(!v){
     if(typeof _clearActivityElapsedTimer==='function') _clearActivityElapsedTimer();
@@ -19425,9 +19539,10 @@ function _loadJsyamlThen(cb){
   if(_jsyamlLoading){ setTimeout(()=>_loadJsyamlThen(cb),100); return; }
   _jsyamlLoading=true;
   const s=document.createElement('script');
-  s.src='static/vendor/js-yaml/4.1.0/js-yaml.min.js';
+  // Through _vendorAssetUrl for the ?v= — without it this URL misses the
+  // sw.js pre-cache entry (which carries the version) and drops to max-age=300.
+  s.src=_vendorAssetUrl('static/vendor/js-yaml/4.1.0/js-yaml.min.js');
   s.integrity='sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du';
-  s.crossOrigin='anonymous';
   s.onload=()=>{ _jsyamlLoading=false; cb(); };
   s.onerror=()=>{ _jsyamlLoading=false; }; // CDN blocked, fall back to raw
   document.head.appendChild(s);
@@ -19615,6 +19730,27 @@ function addCopyButtons(container){
       pre.appendChild(btn);
     }
   });
+}
+
+// Resolve a vendored asset to an absolute, cache-busted URL.
+//
+// PDF.js and Mermaid are the two heavyweight libraries this file loads on
+// demand (~4.7 MB unminified between them). They used to come from
+// cdn.jsdelivr.net, which was the last third-party origin in the CSP and the
+// last thing that broke on an air-gapped deployment. They are vendored under
+// static/vendor/ now; this helper is what keeps them local AND keeps the ?v=
+// cache-buster that earns them the immutable far-future Cache-Control from
+// _serve_static. Same convention as terminal.js's xterm loader.
+function _vendorAssetUrl(relPath){
+  const version=(window.__HERMES_WEBUI_BUNDLE_VERSION__||'');
+  // NOT re-encoded. index.html receives this token already percent-encoded by
+  // the server (quote(WEBUI_VERSION, safe="")), and sw.js pre-caches these URLs
+  // with the same raw token. encodeURIComponent() here would double-escape any
+  // version that needed escaping in the first place — the real one being the
+  // "not detected" fallback, which would become `not%2520detected` and miss
+  // every pre-cache entry.
+  const src=relPath+(version?'?v='+version:'');
+  return new URL(src,document.baseURI||location.href).href;
 }
 
 let _mermaidLoading=false;
@@ -19844,9 +19980,10 @@ function _renderExcalidrawCanvases(){
 }
 
 // ── PDF inline preview (first page) ────────────────────────────────────────
-// NOTE: PDF.js is loaded from CDN (jsdelivr). Offline/air-gapped deployments
-// will not get inline previews; the 15 s fallback timeout degrades to a
-// download link in that case. The 4 MB size cap is checked client-side after
+// NOTE: PDF.js is vendored under static/vendor/pdfjs/ and loaded on demand, so
+// air-gapped deployments get inline previews too. The 15 s fallback timeout
+// still degrades to a download link if the load fails for any other reason.
+// The 4 MB size cap is checked client-side after
 // the full buffer is received — ideally the server would enforce it before
 // streaming (out of scope for this client-side PR).
 let _pdfjsReady=false, _pdfjsLoading=false;
@@ -19921,8 +20058,11 @@ function loadPdfInline(container){
       loadPdf(window._pdfjsLib);
     } else if(!_pdfjsLoading){
       _pdfjsLoading=true;
-      const _pdfSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.min.mjs';
-      const _pdfWorker='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.worker.min.mjs';
+      // Vendored, not CDN-hosted — see _vendorAssetUrl. The URLs must be
+      // ABSOLUTE: the import runs inside a blob: module, and a relative
+      // specifier there resolves against the blob URL, not the page.
+      const _pdfSrc=_vendorAssetUrl('static/vendor/pdfjs/4.9.155/pdf.min.mjs');
+      const _pdfWorker=_vendorAssetUrl('static/vendor/pdfjs/4.9.155/pdf.worker.min.mjs');
       const _pdfBlob=new Blob([`import*as p from'${_pdfSrc}';p.GlobalWorkerOptions.workerSrc='${_pdfWorker}';window._pdfjsLib=p;window._pdfjsReady=true;window.dispatchEvent(new Event('pdfjs-ready'));`],{type:'application/javascript'});
       const s=document.createElement('script');
       s.type='module';
@@ -19984,9 +20124,15 @@ function renderMermaidBlocks(container){
     if(!_mermaidLoading){
       _mermaidLoading=true;
       const script=document.createElement('script');
-      script.src='https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js';
+      // Vendored. The pinned SRI hash is kept: the vendored file is byte-identical
+      // to the CDN copy it replaced, so the hash still verifies. crossOrigin is
+      // dropped — it only ever existed to make the CDN response CORS-readable so
+      // SRI could check it, and a same-origin script needs no such thing.
+      // tests/test_vendored_frontend_assets.py recomputes every one of these
+      // hashes against the file on disk, so a vendor bump cannot leave a stale
+      // hash behind (which fails closed and silently).
+      script.src=_vendorAssetUrl('static/vendor/mermaid/10.9.3/mermaid.min.js');
       script.integrity='sha384-R63zfMfSwJF4xCR11wXii+QUsbiBIdiDzDbtxia72oGWfkT7WHJfmD/I/eeHPJyT';
-      script.crossOrigin='anonymous';
       script.onload=()=>{
         if(typeof mermaid!=='undefined'){
           mermaid.initialize({startOnLoad:false,theme:document.documentElement.classList.contains('dark')?'dark':'default',themeVariables:{
@@ -19998,6 +20144,10 @@ function renderMermaidBlocks(container){
           renderMermaidBlocks();
         }
       };
+      // A failed fetch must not wedge diagrams forever: clearing the flag lets
+      // the next render pass retry instead of leaving every block unrendered
+      // with no path back.
+      script.onerror=()=>{ _mermaidLoading=false; script.remove(); };
       document.head.appendChild(script);
     }
     return;
@@ -20057,9 +20207,9 @@ function renderKatexBlocks(container,options){
     if(!_katexLoading){
       _katexLoading=true;
       const script=document.createElement('script');
-      script.src='static/vendor/katex/0.16.22/katex.min.js';
+      // Same as js-yaml: the ?v= is what makes the sw.js pre-cache entry match.
+      script.src=_vendorAssetUrl('static/vendor/katex/0.16.22/katex.min.js');
       script.integrity='sha384-cMkvdD8LoxVzGF/RPUKAcvmm49FQ0oxwDF3BGKtDXcEc+T1b2N+teh/OJfpU0jr6';
-      script.crossOrigin='anonymous';
       script.onload=()=>{
         if(typeof katex!=='undefined'){
           _katexReady=true;

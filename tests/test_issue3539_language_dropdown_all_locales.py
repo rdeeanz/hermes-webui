@@ -23,9 +23,20 @@ def _language_dropdown_block() -> str:
 
 def test_language_dropdown_lists_all_locales_no_allowlist():
     block = _language_dropdown_block()
-    # It must iterate every LOCALES entry...
-    assert "Object.entries(LOCALES)" in block, (
-        "the language dropdown must enumerate all LOCALES entries"
+    # It must iterate every locale the build knows about.
+    #
+    # That used to mean `Object.entries(LOCALES)`. Since the per-language split
+    # (scripts/split_i18n.py) it does NOT: LOCALES holds only the bundles that
+    # have actually been downloaded — English plus the reader's own language —
+    # so enumerating it would list two options and silently reset everyone else
+    # to English on the next save. That is this file's original bug arriving
+    # through a different door, so the guard now points at the manifest.
+    assert "knownLocaleCodes()" in block, (
+        "the language dropdown must enumerate every locale in the manifest"
+    )
+    assert "Object.entries(LOCALES)" not in block, (
+        "LOCALES holds only the DOWNLOADED locales since the i18n split — "
+        "enumerating it is itself the allow-list bug this test exists to catch"
     )
     # ...with NO hardcoded allow-list filter that drops existing locales.
     assert "allowed=[" not in block.replace(" ", "") and "allowed = [" not in block, (

@@ -1715,6 +1715,10 @@ async function send(){
   S.toolCalls=[];  // clear tool calls from previous turn
   clearLiveToolCards();  // clear any leftover live cards from last turn
   let optimisticMessages;
+  // A light tap the instant the turn becomes visible. Paired with the optimistic
+  // bubble above, this is what makes a send feel committed on a slow mobile
+  // connection — the alternative is a spinner and no other feedback for seconds.
+  if(typeof window!=='undefined'&&window.HermesNative) window.HermesNative.haptic('tap');
   try{
     S.messages.push(userMsg);renderMessages();setBusy(true);
     if(S.session&&!S.session.pending_started_at) S.session.pending_started_at=Date.now()/1000;
@@ -1788,6 +1792,10 @@ async function send(){
   let postStartData;
   let modelStateForPostStart;
   let explicitPickForPostStart;
+  // Captured outside the try so the offline branch in the catch can hand the
+  // exact same payload to the outbox instead of rebuilding it and risking a
+  // drift between what was attempted and what gets replayed.
+  let startPayloadForOutbox=null;
   try{
     const _modelState=_chatPayloadModelState();
     modelStateForPostStart=_modelState;
@@ -1819,7 +1827,7 @@ async function send(){
     // pick. (#3739/#3737, Codex catch)
     if(_pendingPickMatch && typeof _clearPendingSessionModel==='function') _clearPendingSessionModel(activeSid);
     explicitPickForPostStart=_explicitPick;
-    const startData=await api('/api/chat/start',{method:'POST',body:JSON.stringify({
+    startPayloadForOutbox={
       session_id:activeSid,message:msgText,
       // S.session.model remains authoritative; the helper only resolves a
       // matching provider fallback for the same outgoing model.
@@ -1829,11 +1837,56 @@ async function send(){
       explicit_model_pick:_explicitPick||undefined,
       attachments:uploaded.length?uploaded:undefined,
       moa_config:_pendingMoaConfig?true:undefined
-    })});
+    };
+    const startData=await api('/api/chat/start',{method:'POST',body:JSON.stringify(startPayloadForOutbox)});
     _pendingMoaConfig=null;
     postStartData = startData;
   }catch(e){
     const errMsg=String((e&&e.message)||'');
+    // ── Offline: queue it, do not lose it ──────────────────────────────────
+    //
+    // api() throws the raw TypeError from fetch when the request never reached
+    // a server (already retried three times with backoff), and every HTTP error
+    // it raises carries a numeric .status — so "TypeError with no status" is a
+    // precise signal for "there was nothing to talk to", not a guess.
+    //
+    // The old behaviour here was to push an **Error:** bubble into the
+    // transcript and hand the draft back to the composer. On a phone that is
+    // the common case, not the exceptional one: a lift, a tunnel, a dead spot.
+    // The turn goes to the IndexedDB outbox instead and is sent when the
+    // network returns, so the user can lock the phone and walk away.
+    const isNetworkFailure=(e instanceof TypeError)
+      || (e&&e.name==='TypeError'&&e.status===undefined);
+    if(isNetworkFailure && startPayloadForOutbox && window.HermesOutbox){
+      const queuedId=await window.HermesOutbox.enqueue({
+        session_id:activeSid,
+        payload:startPayloadForOutbox,
+        display_text:displayText,
+      });
+      if(queuedId!==null){
+        delete INFLIGHT[activeSid];
+        if(typeof clearInflightState==='function') clearInflightState(activeSid);
+        stopApprovalPolling();
+        stopClarifyPolling();
+        if(!_approvalSessionId || _approvalSessionId===activeSid) hideApprovalCard(true);
+        if(!_clarifySessionId || _clarifySessionId===activeSid) hideClarifyCard(true, 'terminal');
+        removeThinking();
+        // The user's bubble stays in the transcript — it IS going to be sent —
+        // but the spinner has to go, or the pane claims an agent is working.
+        setBusy(false);
+        userMsg._pending=false;
+        renderMessages();
+        setComposerStatus(t('offline_send_queued'));
+        if(typeof showToast==='function') showToast(t('offline_send_queued'),3200);
+        if(typeof clearOptimisticSessionStreaming==='function') clearOptimisticSessionStreaming(activeSid);
+        // Deliberately NOT restoring the composer draft: the message is queued,
+        // and putting it back in the box would invite sending it twice.
+        return;
+      }
+      // The queue refused it (private browsing, no IndexedDB, quota). Fall
+      // through to the original error path, which puts the draft back — the
+      // user's text must survive one way or the other.
+    }
     // If /api/chat/start returns 404, the session was deleted server-side
     // (its sidecar is gone) while GET kept returning a CLI stub (#2782). Strip
     // the stale /session/<id> URL and clear localStorage so a reload does not
@@ -7477,18 +7530,48 @@ function activeSessionHasPendingPromptAttention() {
   ));
 }
 
+// Pending approvals on the home-screen icon (App Badging API).
+//
+// The natural pair for the approval push from P0.2: the push tells you once, the
+// badge keeps telling you. An approval BLOCKS the agent until it is answered,
+// which is what makes it the right thing to badge — a finished turn can wait
+// until you look, a blocked agent cannot.
+//
+// Driven from _approvalPendingBySession, the one map both the set and the clear
+// path below go through, so the badge cannot drift from what the app believes is
+// pending. Summed across sessions: three sessions each waiting on one approval
+// is three things to answer, not one.
+//
+// setBadge() itself skips no-op writes, which matters because the approval
+// poller calls through here every couple of seconds.
+function _syncApprovalAppBadge() {
+  const native = (typeof window !== 'undefined') ? window.HermesNative : null;
+  if (!native || typeof native.setBadge !== 'function') return;
+  let total = 0;
+  _approvalPendingBySession.forEach((entry) => {
+    total += Math.max(1, Number(entry && entry.pendingCount) || 1);
+  });
+  void native.setBadge(total);
+}
+
 function _rememberApprovalPending(pending, pendingCount) {
   if (!pending) return null;
   const sid = pending._session_id || _promptActiveSessionId();
   if (!sid) return null;
   const nextPending = {...pending, _session_id: sid};
   _approvalPendingBySession.set(sid, {pending: nextPending, pendingCount: pendingCount || 1});
+  // `typeof` guard to match the syncTopbar call below: several tests extract
+  // these two functions on their own into a bare vm context, where a hard
+  // reference to a sibling is a ReferenceError. It also states the truth — the
+  // badge is an optional enhancement, not part of the approval contract.
+  if (typeof _syncApprovalAppBadge === 'function') _syncApprovalAppBadge();
   return sid;
 }
 
 function _clearApprovalPendingForSession(sid) {
   if (sid) {
     _approvalPendingBySession.delete(sid);
+    if (typeof _syncApprovalAppBadge === 'function') _syncApprovalAppBadge();
     if (typeof syncTopbar === 'function') syncTopbar();
   }
 }
@@ -7684,7 +7767,28 @@ function showApprovalCard(pending, pendingCount) {
   if (typeof applyLocaleToDOM === "function") applyLocaleToDOM();
   const onceBtn = $("approvalBtnOnce");
   if (onceBtn && document.activeElement !== $('msg')) {
+    // Focus moving into role="alertdialog" is what makes VoiceOver/TalkBack read
+    // the heading, the description and now the command (aria-describedby covers
+    // approvalCmd too — the command about to run was previously never spoken).
     setTimeout(() => onceBtn.focus({preventScroll: true}), 50);
+  } else if (!sameApproval) {
+    // Focus is in the composer, so it is deliberately NOT stolen — yanking focus
+    // mid-sentence is its own accessibility failure. But an approval blocks the
+    // agent until it is answered, so silence is not an option either: announce
+    // it assertively and leave the user to move to it when they are ready.
+    //
+    // Guarded on !sameApproval so a re-render of the SAME approval (the poller
+    // fires every couple of seconds) cannot turn this into a loop.
+    const a11y = (typeof window !== 'undefined') ? window.HermesA11y : null;
+    if (a11y && typeof a11y.announce === 'function') {
+      const fallback = 'Approval required: ' + (cmd || desc || '');
+      let text = fallback;
+      if (typeof t === 'function') {
+        const val = t('a11y_approval_pending', cmd || desc || '');
+        if (val && val !== 'a11y_approval_pending') text = val;
+      }
+      a11y.announce(text, {assertive: true});
+    }
   }
   if (typeof syncTopbar === 'function') syncTopbar();
 }
@@ -7782,6 +7886,14 @@ async function respondApproval(choice, options = {}) {
   _approvalResponding = {...owner, choice};
   _approvalResponding.controlChoice = controlChoice;
   _setApprovalControlsDisabled(controlChoice, true);
+  // Haptic acknowledgement on the highest-consequence tap in the app: this is
+  // the one that lets a command run. Fired here, on the tap, rather than after
+  // the round-trip — a buzz that arrives 400 ms later reads as a glitch, not as
+  // confirmation of the thing you just did. 'warn' for deny, so the two
+  // outcomes are distinguishable without looking.
+  if (typeof window !== 'undefined' && window.HermesNative) {
+    window.HermesNative.haptic(choice === 'deny' ? 'warn' : 'confirm');
+  }
   try {
     const result = await api("/api/approval/respond", {
       method: "POST",
@@ -9348,3 +9460,39 @@ function startBackgroundPolling(parentSid, taskId, prompt){
 }
 
 // ── Panel navigation (Chat / Tasks / Skills / Memory) ──
+
+// ── Offline send queue: what happens when it drains ──────────────────────────
+//
+// static/outbox.js owns the durable queue and the flush triggers; it knows
+// nothing about the chat pane. When one of its entries reaches the server the
+// turn is running there, but this tab has no stream attached to it — so the
+// answer would arrive nowhere until the next manual refresh.
+//
+// Reloading the session is enough: loadSession() re-reads the transcript and the
+// existing reattach path picks up the live stream (the server buffers events
+// while no subscriber is attached, #2307). Only the session the user is looking
+// at is reloaded; a drained queue for some other session shows up in the sidebar
+// refresh instead of yanking the view around.
+if(typeof window!=='undefined'&&window.HermesOutbox&&typeof window.HermesOutbox.onChange==='function'){
+  window.HermesOutbox.onChange((detail)=>{
+    if(!detail) return;
+    const sid=detail.session_id||null;
+    const activeSid=(typeof S!=='undefined'&&S&&S.session)?S.session.session_id:null;
+    if(detail.reason==='sent'){
+      if(sid&&activeSid&&sid===activeSid&&typeof loadSession==='function'){
+        void loadSession(sid);
+      } else if(typeof renderSessionList==='function'){
+        void renderSessionList();
+      }
+      return;
+    }
+    if(detail.reason==='rejected'){
+      // The server refused it, so it will never send. Say so loudly rather than
+      // dropping it silently — the user believed this message was on its way.
+      const reason=detail.error?(': '+String(detail.error).slice(0,160)):'';
+      if(typeof showToast==='function'){
+        showToast('A message queued while offline was rejected'+reason,6000,'error');
+      }
+    }
+  });
+}

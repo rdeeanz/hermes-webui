@@ -197,6 +197,51 @@ function _xtermReady(){
   return typeof window.Terminal==='function';
 }
 
+// xterm.js and its two addons total ~68 KiB gzipped — more than every vendored
+// asset on the page combined. They used to load eagerly in <head> on every page
+// view, including on phones, where the embedded terminal is opened by almost
+// nobody. They are fetched here instead, the first time a terminal is actually
+// started.
+//
+// Not pre-cached by the service worker either: a terminal is a live PTY on the
+// server, so having the library available offline buys nothing.
+const _XTERM_ASSETS=[
+  {tag:'link',href:'static/vendor/xterm/5.3.0/xterm.css'},
+  {tag:'script',href:'static/vendor/xterm/5.3.0/xterm.js'},
+  {tag:'script',href:'static/vendor/xterm/5.3.0/xterm-addon-fit.js'},
+  {tag:'script',href:'static/vendor/xterm/5.3.0/xterm-addon-web-links.js'},
+];
+let _xtermLoadPromise=null;
+
+function _loadXtermAsset(asset){
+  return new Promise((resolve,reject)=>{
+    const version=(window.__HERMES_WEBUI_BUNDLE_VERSION__||'');
+    const src=asset.href+(version?'?v='+encodeURIComponent(version):'');
+    const href=new URL(src,document.baseURI||location.href).href;
+    const el=document.createElement(asset.tag==='link'?'link':'script');
+    if(asset.tag==='link'){el.rel='stylesheet';el.href=href;}
+    else{el.src=href;el.async=false;}
+    el.onload=()=>resolve();
+    el.onerror=()=>reject(new Error('failed to load '+asset.href));
+    document.head.appendChild(el);
+  });
+}
+
+// Cached so reopening the terminal does not refetch, and so two rapid opens
+// share one in-flight load. A failure clears the cache so a later attempt can
+// retry rather than being stuck with a rejected promise forever.
+function _loadXterm(){
+  if(_xtermReady())return Promise.resolve(true);
+  if(_xtermLoadPromise)return _xtermLoadPromise;
+  // The addons attach themselves to window and depend on xterm.js having run,
+  // so these load in sequence rather than in parallel.
+  _xtermLoadPromise=_XTERM_ASSETS.reduce(
+    (chain,asset)=>chain.then(()=>_loadXtermAsset(asset)),
+    Promise.resolve()
+  ).then(()=>_xtermReady()).catch(()=>{_xtermLoadPromise=null;return false;});
+  return _xtermLoadPromise;
+}
+
 function _ensureXterm(){
   const {surface}= _terminalEls();
   if(!surface)return null;
@@ -553,6 +598,9 @@ async function _startComposerTerminal(restart=false){
     syncTerminalButton();
     return;
   }
+  // Fetch xterm on first use. _ensureXterm() already renders a readable message
+  // if the library is missing, so a failed load degrades rather than throwing.
+  await _loadXterm();
   const term=_ensureXterm();
   if(!term)return;
   _fitTerminal();

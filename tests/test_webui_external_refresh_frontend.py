@@ -385,8 +385,58 @@ def test_session_list_render_signature_does_not_skip_recovering_from_skeleton_or
 
 
 def test_pwa_pull_to_refresh_refreshes_session_list_not_page_when_available():
-    assert "window.refreshSessionList('pull', {force:true, refreshActive:true})" in UI_JS
-    assert "Promise.resolve(window.refreshSessionList('pull', {force:true, refreshActive:true})).catch(()=>{}).finally(_ptrReset)" in UI_JS
+    """A pull refreshes DATA, never the document.
+
+    window.location.reload() on a pull throws away the transcript, the composer
+    draft and the SSE attachment to reload markup that has not changed. It
+    survives only as the fallback for when refreshSessionList is somehow absent.
+
+    The assertions moved off an exact inline expression because pull-to-refresh
+    is now one factory used by two scrollers (the session list — which is where
+    the roadmap asked for it — and the transcript). A single hardcoded call
+    string could only ever describe one of them.
+    """
+    assert "function _attachPullToRefresh(el, opts)" in UI_JS, (
+        "pull-to-refresh should be one implementation, not one per scroller"
+    )
+    # Both scrollers refresh the list rather than the page.
+    assert UI_JS.count("window.refreshSessionList('pull',{force:true,refreshActive:true})") == 2, (
+        "both the session list and the transcript pull must call "
+        "refreshSessionList, not reload the document"
+    )
+    # reload() survives only as the guarded fallback inside the transcript pull.
+    # Scoped to that block rather than searched globally: the first
+    # `window.location.reload()` in ui.js is inside a comment in
+    # _recoverFromOfflineSoftly, and a whole-file index lands on the prose.
+    ptr_calls = UI_JS[UI_JS.index("_attachPullToRefresh(document.getElementById('messages')"):]
+    ptr_calls = ptr_calls[: ptr_calls.index("\n})();")]
+    assert "window.location.reload()" in ptr_calls
+    guard_idx = ptr_calls.index("typeof window.refreshSessionList==='function'")
+    assert guard_idx < ptr_calls.index("window.location.reload()"), (
+        "reload() must stay behind the refreshSessionList availability check"
+    )
+    # The indicator has to be reset whatever the refresh does, or a failed
+    # refresh leaves a stuck "Release to refresh" banner over the list.
+    assert ".catch(()=>{}).finally(_ptrReset)" in UI_JS
+
+
+def test_pull_to_refresh_is_attached_to_the_session_list_at_every_viewport():
+    """The transcript pull is standalone-only; the session list is not.
+
+    Pulling a list to refresh it is an ordinary mobile idiom in a browser tab
+    too, and .session-list already sets overscroll-behavior-y:contain, which is
+    what stops the gesture chaining into the browser's own pull-to-refresh.
+    """
+    block = UI_JS[UI_JS.index("_attachPullToRefresh(document.getElementById('sessionList')"):]
+    block = block[: block.index("const isStandalone")]
+    assert "onRefresh" in block
+    assert "display-mode:standalone" not in block, (
+        "the session-list pull must not be gated on standalone mode"
+    )
+    # And the transcript pull keeps its gate.
+    tail = UI_JS[UI_JS.index("const isStandalone"):]
+    assert "display-mode:standalone" in tail
+    assert "_attachPullToRefresh(document.getElementById('messages')" in tail
 
 
 def test_force_reload_clears_stale_blocking_prompts_immediately():

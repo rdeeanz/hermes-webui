@@ -64,6 +64,33 @@ def _load_session_404_block() -> str:
     return block[start:end]
 
 
+def _strip_line_comments(src: str) -> str:
+    """Drop whole-line JS comments.
+
+    The assertions below include a substring BAN ("**Error:**"), and the catch
+    block now opens with a comment explaining why an offline send is queued
+    instead of turning into that bubble. Scanning raw text fails on the
+    explanation, which pressures the next person to delete the comment rather
+    than keep the property. Only whole-line comments go, so a `//` inside a
+    string or a regex on a code line is untouched.
+    """
+    out, in_block = [], False
+    for line in src.splitlines():
+        s = line.strip()
+        if in_block:
+            if "*/" in s:
+                in_block = False
+            continue
+        if s.startswith("/*"):
+            if "*/" not in s:
+                in_block = True
+            continue
+        if s.startswith("//") or s.startswith("*"):
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
 def _send_catch_block() -> str:
     """The catch(e) body of send() after POST /api/chat/start."""
     start = MESSAGES_JS.find("const startData=await api('/api/chat/start'")
@@ -73,7 +100,7 @@ def _send_catch_block() -> str:
     # Stop at the conflictActiveStream marker; the 404 branch must precede it.
     end = MESSAGES_JS.find("const conflictActiveStream", catch_idx)
     assert end > catch_idx, "send() catch conflictActiveStream marker not found"
-    return MESSAGES_JS[catch_idx:end]
+    return _strip_line_comments(MESSAGES_JS[catch_idx:end])
 
 
 def test_api_http_errors_preserve_response_status():

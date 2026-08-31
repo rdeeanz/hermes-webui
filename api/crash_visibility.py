@@ -127,6 +127,28 @@ def _emit(level: int, message: str, *, exc_info=None) -> None:
         pass
 
 
+def _push_crash(where: str, exc_type, exc_value, *, wait_seconds: float = 0.0) -> None:
+    """Best-effort Web Push for an uncaught exception.
+
+    Reaches an operator who is not tailing the log — the whole point of #4633
+    was that these deaths are silent, and a log line is only visible to someone
+    already looking. Rate limiting and the "never raise" guarantee both live in
+    ``api.push.notify_crash``; this wrapper only has to make sure an import
+    failure here cannot become the new silent-failure mode.
+    """
+    try:
+        from api import push as _push
+
+        _push.notify_crash(
+            where,
+            getattr(exc_type, "__name__", str(exc_type)),
+            str(exc_value or ""),
+            wait_seconds=wait_seconds,
+        )
+    except Exception:
+        pass
+
+
 def thread_excepthook(args) -> None:
     """threading.excepthook: log any uncaught exception in a daemon/handler thread.
 
@@ -153,6 +175,9 @@ def thread_excepthook(args) -> None:
             % (thread_name, thread_ident, daemon, getattr(exc_type, "__name__", exc_type)),
             exc_info=(exc_type, exc_value, exc_tb),
         )
+        # The process survives a thread-level exception, so delivery needs no
+        # window held open for it — the daemon thread finishes on its own.
+        _push_crash(f"thread {thread_name}", exc_type, exc_value)
     except Exception:
         # A hook that raises would re-introduce the silent-death class of bug.
         try:
@@ -190,6 +215,10 @@ def main_excepthook(exc_type, exc_value, exc_tb) -> None:
             % (getattr(exc_type, "__name__", exc_type),),
             exc_info=(exc_type, exc_value, exc_tb),
         )
+        # The interpreter is on its way out and daemon threads do not survive
+        # that, so give delivery a short bounded window. Bounded: a push service
+        # that hangs must not be what stops the process from exiting.
+        _push_crash("the server", exc_type, exc_value, wait_seconds=3.0)
     except Exception:
         try:
             _direct_write("[crash-visibility] main_excepthook failed to log an exception")

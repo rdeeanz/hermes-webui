@@ -38,7 +38,11 @@ def test_handler_adds_content_security_policy_report_only(monkeypatch):
 def test_csp_report_only_keeps_legacy_inline_allowances_for_current_ui():
     policy = Handler.csp_report_only_policy()
 
-    assert "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/ https://cdn.jsdelivr.net/npm/mermaid@10.9.3/" in policy
+    # PDF.js and Mermaid are vendored, so script-src names no CDN at all now —
+    # only Cloudflare Insights (which applies behind Cloudflare Access) and
+    # blob:, which ui.js uses to bootstrap PDF.js's worker configuration.
+    assert "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com blob:" in policy
+    assert "jsdelivr" not in policy
     assert "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com" in policy
     # unsafe-eval was dropped after Opus stage-339 verification — no production
     # JS uses eval(), new Function(), or string-form setTimeout/setInterval.

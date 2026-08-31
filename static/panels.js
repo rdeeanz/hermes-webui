@@ -433,21 +433,44 @@ async function switchPanel(name, opts = {}) {
       sidebar.classList.add('mobile-panel-drawer', 'mobile-open');
     }
   }
-  // Update nav tabs (rail + mobile sidebar-nav share data-panel)
-  document.querySelectorAll('[data-panel]').forEach(t => t.classList.toggle('active', t.dataset.panel === nextPanel));
-  // Refresh aria-expanded on the newly-active rail button to mirror sidebar state.
-  if (typeof _syncSidebarAria === 'function') _syncSidebarAria();
-  // Update panel views
-  document.querySelectorAll('.panel-view').forEach(p => p.classList.remove('active'));
-  const panelEl = $('panel' + nextPanel.charAt(0).toUpperCase() + nextPanel.slice(1));
-  if (panelEl) panelEl.classList.add('active');
-  // Update main content view. Each entry in MAIN_VIEW_PANELS gets a matching
-  // showing-<name> class on <main>; no class means chat (the default).
-  const mainEl = document.querySelector('main.main');
-  if (mainEl) {
-    MAIN_VIEW_PANELS.forEach(p => {
-      mainEl.classList.toggle('showing-' + p, nextPanel === p);
-    });
+  // The synchronous view swap, wrapped in a View Transition where the browser
+  // has one (Chromium 111+, Safari 18+).
+  //
+  // Scope matters in both directions. Only the class toggles below are inside
+  // the callback: the `await loadX()` calls that follow must NOT be, because a
+  // transition holds a visual snapshot of the whole page until its callback
+  // settles — putting a network request in there would freeze the UI for the
+  // length of the request, which is precisely the opposite of the intent.
+  //
+  // HermesNative.viewTransition always runs the callback, whether or not it
+  // starts a transition (unsupported, reduced-motion, one already running, tab
+  // hidden). That guarantee is what makes this safe to wrap around load-bearing
+  // DOM updates rather than decoration.
+  const _applyPanelViewSwap = () => {
+    // Update nav tabs (rail + mobile sidebar-nav share data-panel)
+    document.querySelectorAll('[data-panel]').forEach(t => t.classList.toggle('active', t.dataset.panel === nextPanel));
+    // Refresh aria-expanded on the newly-active rail button to mirror sidebar state.
+    if (typeof _syncSidebarAria === 'function') _syncSidebarAria();
+    // Update panel views
+    document.querySelectorAll('.panel-view').forEach(p => p.classList.remove('active'));
+    const panelEl = $('panel' + nextPanel.charAt(0).toUpperCase() + nextPanel.slice(1));
+    if (panelEl) panelEl.classList.add('active');
+    // Update main content view. Each entry in MAIN_VIEW_PANELS gets a matching
+    // showing-<name> class on <main>; no class means chat (the default).
+    const mainEl = document.querySelector('main.main');
+    if (mainEl) {
+      MAIN_VIEW_PANELS.forEach(p => {
+        mainEl.classList.toggle('showing-' + p, nextPanel === p);
+      });
+    }
+  };
+  // Only animate a real change of panel. Re-selecting the current panel (a
+  // second rail tap, a programmatic resync) would otherwise cross-fade the
+  // screen with itself.
+  if (prevPanel !== nextPanel && typeof window !== 'undefined' && window.HermesNative) {
+    window.HermesNative.viewTransition(_applyPanelViewSwap, {name: 'panel'});
+  } else {
+    _applyPanelViewSwap();
   }
   // Lazy-load panel data
   if (nextPanel === 'tasks') await loadCrons();
@@ -9321,16 +9344,24 @@ async function loadSettingsPanel(){
     // Send key preference
     const sendKeySel=$('settingsSendKey');
     if(sendKeySel){sendKeySel.value=settings.send_key||'enter';sendKeySel.addEventListener('change',_schedulePreferencesAutosave,{once:false});}
-    // Language preference — populate from LOCALES bundle
+    // Language preference — populate from the locale MANIFEST, not from LOCALES.
+    // Since the split (scripts/split_i18n.py) LOCALES holds only the bundles
+    // actually loaded — English plus the reader's own language. Listing its
+    // keys would show a two-entry picker, and a reader could never select a
+    // language because selecting it is what triggers the download.
     const langSel=$('settingsLanguage');
     if(langSel){
       langSel.innerHTML='';
-      if(typeof LOCALES!=='undefined'){
-        for(const [code,bundle] of Object.entries(LOCALES)){
-          const opt=document.createElement('option');
-          opt.value=code;opt.textContent=bundle._label||code;
-          langSel.appendChild(opt);
-        }
+      const langCodes=(typeof knownLocaleCodes==='function')
+        ? knownLocaleCodes()
+        : (typeof LOCALES!=='undefined' ? Object.keys(LOCALES) : []);
+      for(const code of langCodes){
+        const opt=document.createElement('option');
+        opt.value=code;
+        opt.textContent=(typeof localeLabel==='function')
+          ? localeLabel(code)
+          : ((LOCALES[code]&&LOCALES[code]._label)||code);
+        langSel.appendChild(opt);
       }
       langSel.value=resolvedLanguage;
       langSel.addEventListener('change',function(){
@@ -12880,9 +12911,43 @@ async function saveSettings(andClose){
   }
 }
 
+// The service worker keeps a data cache (session list + last transcript) that
+// deliberately survives version bumps, so signing out has to clear it
+// explicitly — otherwise the next person to open the app on a shared device
+// boots offline into the previous reader's sessions. Awaited (with a short
+// ceiling) so the purge lands before the navigation kills this page; a service
+// worker that never answers must not block the sign-out itself.
+function _purgeOfflineDataCache(){
+  return new Promise((resolve)=>{
+    let settled=false;
+    const done=()=>{ if(!settled){settled=true;resolve();} };
+    setTimeout(done,1500);
+    try{
+      const sw=(typeof navigator!=='undefined')?navigator.serviceWorker:null;
+      const controller=sw&&sw.controller;
+      if(!controller){done();return;}
+      if(typeof MessageChannel!=='function'){
+        controller.postMessage({type:'hermes:purge-data-cache'});
+        done();
+        return;
+      }
+      const channel=new MessageChannel();
+      channel.port1.onmessage=done;
+      controller.postMessage({type:'hermes:purge-data-cache'},[channel.port2]);
+    }catch(_){done();}
+  });
+}
+
 async function signOut(){
   try{
     const response=await api('/api/auth/logout',{method:'POST',body:'{}'});
+    // Local cleanup, and deliberately non-fatal. The server has already
+    // invalidated the session by this point, so a failure to clear the offline
+    // copies must not leave the user sitting on a page that still looks signed
+    // in — that would be a worse outcome than a stale cache.
+    try{ await _purgeOfflineDataCache(); }catch(_){}
+    // Unsent messages belong to the account that queued them, not the device.
+    try{ if(window.HermesOutbox) await window.HermesOutbox.clear(); }catch(_){}
     window.location.href=response.trusted_logout_url||'login';
   }catch(e){
     showToast(t('sign_out_failed')+e.message);
@@ -13633,8 +13698,26 @@ async function onPushToggleChanged(){
 // the whole file down.
 if(typeof navigator!=='undefined'&&navigator.serviceWorker&&navigator.serviceWorker.addEventListener){
   navigator.serviceWorker.addEventListener('message',(event)=>{
-    if(event&&event.data&&event.data.type==='hermes:push-resubscribe'){
+    const type=event&&event.data&&event.data.type;
+    if(type==='hermes:push-resubscribe'){
       _currentPushSubscription().then(sub=>{ if(!sub) subscribeToPush().catch(()=>{}); });
+      return;
+    }
+    // The cold-boot sidebar was painted from the service worker's cached copy
+    // and the revalidation came back different — re-render against the network.
+    // This can only fire once per divergence: the refetch is network-first, and
+    // sw.js only sends the message when the fresh body differs from what it
+    // served, so the second pass finds them equal and goes quiet.
+    if(type==='hermes:sessions-updated'){
+      if(typeof renderSessionList==='function') void renderSessionList();
+      return;
+    }
+    // The auth session expired, so sw.js dropped the offline data cache. Say so
+    // rather than leaving a sidebar on screen that is no longer backed by
+    // anything; the next request's own 401 handling does the redirect.
+    if(type==='hermes:offline-cache-invalidated'){
+      if(typeof showToast==='function') showToast('Signed out — offline copies cleared.',3000);
+      return;
     }
   });
 }

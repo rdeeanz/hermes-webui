@@ -7490,3 +7490,59 @@ html[data-conversation-outline="enabled"] #outlineToggleBtn:not([hidden]){displa
 /* Settings field highlight (mirrors msg-question-highlight / _highlightQuestionRow pattern) */
 .settings-field-highlight { animation: settings-field-pulse 1.6s ease-out; }
 @keyframes settings-field-pulse { 0% { box-shadow: 0 0 0 0 var(--focus-ring); } 35% { box-shadow: 0 0 0 4px var(--focus-ring); } 100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); } }
+
+/* ── View Transitions (P4.2 #7) ───────────────────────────────────────────────
+ *
+ * Pure progressive enhancement: every selector here lives inside
+ * @supports, and the JS runs its DOM update whether or not a transition
+ * starts (see HermesNative.viewTransition). Nothing below is load-bearing.
+ *
+ * Deliberately restrained. The default UA transition cross-fades the entire
+ * page, which on a panel switch reads as a flash because the sidebar and rail
+ * are identical on both sides. Naming the panel container is what limits the
+ * animation to the part that actually changed.
+ */
+@supports (view-transition-name: none) {
+  /* Only the main content area animates. The rail, sidebar and composer keep
+     their own snapshots and so are excluded from the root transition. */
+  main.main { view-transition-name: hermes-main; }
+
+  ::view-transition-old(hermes-main),
+  ::view-transition-new(hermes-main) {
+    /* Short. A panel switch is a navigation, not an effect — past ~200ms it
+       starts to feel like latency rather than polish. */
+    animation-duration: 160ms;
+    animation-timing-function: cubic-bezier(.32, .72, .16, 1);
+  }
+  /* Cross-fade, not a slide: panels are peers, not a hierarchy, so lateral
+     motion would imply a direction that does not exist. */
+  ::view-transition-old(hermes-main) { animation-name: hermes-vt-fade-out; }
+  ::view-transition-new(hermes-main) { animation-name: hermes-vt-fade-in; }
+
+  @keyframes hermes-vt-fade-out { to { opacity: 0; } }
+  @keyframes hermes-vt-fade-in { from { opacity: 0; } }
+
+  /* Belt and braces. viewTransition() already refuses to start one under
+     reduced-motion, but a UA-initiated transition (cross-document navigation,
+     a future @view-transition rule) would not go through that check. */
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) { animation: none !important; }
+  }
+}
+
+/* ── Pull-to-refresh on the session list (P4.2 #6) ───────────────────────────
+ *
+ * The indicator styles themselves live further up, inside an
+ * @supports (padding-top: env(...)) block from when this was standalone-only.
+ * These two rules are what let the same indicator work in the sidebar:
+ *
+ *  1. the indicator is position:absolute, so its containing block has to be the
+ *     sidebar panel — without this it would position against the viewport,
+ *  2. overscroll-behavior-y:contain on .session-list (already set) stops the
+ *     pull chaining into the browser's own pull-to-refresh; touch-action:pan-y
+ *     keeps vertical panning while leaving the gesture interceptable.
+ */
+#panelChat { position: relative; }
+#panelChat > .pull-to-refresh-indicator { top: 0; }

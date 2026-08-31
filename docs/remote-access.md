@@ -2,6 +2,17 @@
 
 How to reach a self-hosted Hermes WebUI from another machine or your phone.
 
+The two approaches on this page -- SSH tunnel and Tailscale -- keep the server
+private and need no certificate. If you want a **public hostname with TLS**
+instead, see [`reverse-proxy.md`](reverse-proxy.md).
+
+> **If you want notifications when the browser is closed, you need HTTPS.**
+> Web Push, "Add to Home Screen" on iOS, and passkeys are all gated by the
+> browser's secure-context rule, so none of them work over `http://` on a
+> non-loopback host. A tunnel to `http://localhost:8787` is exempt (localhost
+> always counts as secure) and does work; browsing to a Tailscale IP over plain
+> HTTP does not. [`reverse-proxy.md`](reverse-proxy.md) covers the setup.
+
 ## Accessing from a remote machine
 
 The server binds to `127.0.0.1` by default (loopback only). If you are running
@@ -51,6 +62,13 @@ HERMES_WEBUI_HOST=0.0.0.0 HERMES_WEBUI_PASSWORD=your-secret ./start.sh
 That's it. Traffic is encrypted end-to-end by WireGuard, and password auth
 protects the UI at the application level. You can add it to your home screen
 for an app-like experience.
+
+Note that a plain `http://<tailscale-ip>:8787` URL is not a secure context as
+far as the browser is concerned, so Web Push and passkeys stay unavailable even
+though the traffic really is encrypted. Tailscale can issue a real certificate
+for a `*.ts.net` name (`tailscale cert`), which resolves this -- point the
+`HERMES_WEBUI_TLS_CERT` / `HERMES_WEBUI_TLS_KEY` variables at it, or terminate
+with a proxy as described in [`reverse-proxy.md`](reverse-proxy.md).
 
 ### Community field report: ARM64 Android via AVF
 

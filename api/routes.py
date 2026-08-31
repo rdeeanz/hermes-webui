@@ -1794,6 +1794,12 @@ def _run_cron_tracked(
         with cron_profile_context_for_home(home):
             return fn()
 
+    # Carries the run's verdict out to the `finally` block, which is the only
+    # place guaranteed to run on every path. Defaults to failure so a crash
+    # before the verdict is known is reported as one rather than silently
+    # notifying success.
+    outcome = {"success": False, "error": "Cron run did not complete."}
+
     try:
         success, output, final_response, error = _run_cron_job_in_profile_subprocess(
             job, execution_profile_home
@@ -1829,6 +1835,11 @@ def _run_cron_tracked(
                 _success = False
                 _error = "Agent completed but produced empty response (model error, timeout, or misconfiguration)"
 
+            # The outcome the notification reports is the corrected one above,
+            # not the raw subprocess result — a run that "succeeded" with an
+            # empty response is a failure the operator wants to hear about.
+            outcome["success"], outcome["error"] = _success, _error
+
             try:
                 mark_job_run(job_id, _success, _error, delivery_error=delivery_error)
             except TypeError:
@@ -1841,6 +1852,7 @@ def _run_cron_tracked(
         _with_cron_home(profile_home, _persist_success)
     except Exception as e:
         logger.exception("Manual cron run failed for job %s", job_id)
+        outcome["success"], outcome["error"] = False, str(e)
         try:
             _with_cron_home(profile_home, lambda: mark_job_run(job_id, False, str(e)))  # noqa: F821  e is bound by the enclosing `except ... as e` and the lambda runs synchronously here
         except Exception:
@@ -1848,6 +1860,16 @@ def _run_cron_tracked(
     finally:
         _mark_cron_done(job_id)
         _publish_session_list_changed("cron_complete", profile=event_profile)
+        # Web push: a cron run finishing is the case with no page open to raise
+        # its own notification — it fires on a schedule nobody is watching.
+        try:
+            from api import push as _push
+
+            _push.notify_cron_complete(
+                job, outcome["success"], outcome["error"], event_profile
+            )
+        except Exception:
+            logger.debug("Web push (manual cron) failed to dispatch", exc_info=True)
 
 _PROVIDER_ALIASES = {
     "claude": "anthropic",
@@ -5642,6 +5664,17 @@ def _csrf_exempt_path(path: str) -> bool:
         "/api/auth/passkey/options",
         "/api/auth/passkey/login",
         "/api/csp-report",
+        # Share Target (PWA). The POST is synthesised by the operating system's
+        # share sheet, so there is nowhere for a session CSRF token to come
+        # from — the app's JavaScript never runs.
+        #
+        # Exempting it is safe because the handler changes NO server state: it
+        # reads the form and 303-redirects with the text on the query string.
+        # The reachable effect of forging one is putting text in the user's
+        # composer, which any page can already do by linking to
+        # `/?share_text=...`. The composer never auto-sends, and the text is
+        # inserted as text, so the user reads it before anything happens.
+        "/share-target",
     }
 
 
@@ -14913,6 +14946,79 @@ def _resolve_new_session_workspace(body, visible_prev_session_id):
     )
     return str(workspace)
 
+_SHARE_TARGET_MAX_BYTES = 8 * 1024 * 1024
+_SHARE_TARGET_MAX_TEXT = 8000
+
+
+def _handle_share_target(handler) -> bool:
+    """Fallback receiver for the PWA Share Target POST.
+
+    static/sw.js normally consumes this and never lets it reach the network —
+    that path handles FILES, because a service worker can read the Blobs
+    straight out of the FormData and stash them for the page.
+
+    This exists for the window where no worker is controlling the page (an
+    update installing, storage cleared, the worker unregistered). Without it the
+    user's deliberate share gesture would end on a 404, which reads as "the app
+    is broken" rather than "try again". So: take the text, hand it to the app on
+    the query string, and drop files with an explicit flag the UI can explain.
+
+    No server state is written, which is also the reason this path is CSRF
+    exempt — see _csrf_exempt_path.
+    """
+    from urllib.parse import urlencode
+
+    from api.upload import parse_multipart
+
+    # Both initialised before the try so no exception path can leave either
+    # unbound — this handler must always reach the redirect.
+    fields: dict = {}
+    had_files = False
+    try:
+        content_type = handler.headers.get("Content-Type", "") or ""
+        content_length = int(handler.headers.get("Content-Length", 0) or 0)
+        if content_length and content_length <= _SHARE_TARGET_MAX_BYTES:
+            if "multipart/form-data" in content_type.lower():
+                parsed_fields, parsed_files = parse_multipart(
+                    handler.rfile, content_type, content_length
+                )
+                fields = parsed_fields or {}
+                had_files = bool(parsed_files)
+            else:
+                from urllib.parse import parse_qs
+
+                raw = handler.rfile.read(content_length).decode("utf-8", "replace")
+                fields = {k: v[0] for k, v in parse_qs(raw, keep_blank_values=True).items()}
+    except Exception:
+        # A malformed share is still a share: fall through to the bare redirect
+        # so the user lands in the app rather than on an error page.
+        logger.debug("share-target: could not parse form", exc_info=True)
+        fields = {}
+        had_files = False
+
+    query = {}
+    for form_name, param in (("text", "share_text"), ("title", "share_title"), ("url", "share_url")):
+        value = str(fields.get(form_name) or "").strip()
+        if value:
+            query[param] = value[:_SHARE_TARGET_MAX_TEXT]
+    if had_files:
+        # The page turns this into a note that files need the app open; silently
+        # dropping them would look like data loss with no explanation.
+        query["share_files_dropped"] = "1"
+    query["shared"] = "1"
+
+    # 303, so the browser reissues as GET and a refresh does not re-POST the
+    # same share.
+    location = "./?" + urlencode(query)
+    handler.send_response(303)
+    handler.send_header("Location", location)
+    handler.send_header("Content-Length", "0")
+    handler.send_header("Cache-Control", "no-store")
+    _security_headers(handler)
+    handler.end_headers()
+    return True
+
+
 def handle_post(handler, parsed) -> bool:
     """Handle all POST routes. Returns True if handled, False for 404."""
     diag = RequestDiagnostics.maybe_start("POST", parsed.path, logger=logger, print_fn=getattr(handler, '_safe_webui_print', None))
@@ -14982,6 +15088,9 @@ def handle_post(handler, parsed) -> bool:
 
     if parsed.path == "/api/health/restart":
         return _handle_health_restart(handler)
+
+    if parsed.path == "/share-target":
+        return _handle_share_target(handler)
 
     if parsed.path == "/api/upload":
         return handle_upload(handler)
@@ -17774,6 +17883,12 @@ def handle_put(handler, parsed) -> bool:
 _STATIC_MIME = {
     "css": "text/css",
     "js": "application/javascript",
+    # Vendored PDF.js ships as .mjs. Without this entry the extension falls
+    # through to the "text/plain" default, and a browser REFUSES to execute an
+    # ES module served as text/plain (strict MIME checking, no override) — the
+    # import fails and the PDF preview degrades to a download link with nothing
+    # in the console to explain why.
+    "mjs": "application/javascript",
     "html": "text/html",
     "svg": "image/svg+xml",
     "png": "image/png",

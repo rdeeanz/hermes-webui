@@ -634,9 +634,17 @@ def install_cron_scheduler_profile_isolation() -> None:
         # the explicitly selected manual execution profile.
         if _cron_profile_context_depth() > 0:
             return original(job, *args, **kwargs)
+        # Failure is the default so an exception escaping run_job is reported as
+        # a failure rather than leaving the notification claiming success.
+        job_ok, job_err = False, "Cron run did not complete."
         try:
             with cron_profile_context_for_home(_home_for_scheduled_cron_job(job)):
-                return original(job, *args, **kwargs)
+                result = original(job, *args, **kwargs)
+            job_ok, job_err = True, None
+            return result
+        except Exception as exc:
+            job_err = str(exc)
+            raise
         finally:
             event_profile = str((job or {}).get("profile") or "").strip() or None
             if _is_isolated_profile_mode():
@@ -647,6 +655,15 @@ def install_cron_scheduler_profile_isolation() -> None:
                 # Focused tests and older integrations may patch the publisher
                 # with the historical one-argument shape.
                 publish_session_list_changed("cron_complete")
+            # Web push. This is the path where push matters most: a scheduled
+            # job fires with nobody watching, so no live page exists to raise
+            # the in-page notification.
+            try:
+                from api import push as _push
+
+                _push.notify_cron_complete(job, job_ok, job_err, event_profile)
+            except Exception:
+                logger.debug("Web push (scheduled cron) failed to dispatch", exc_info=True)
 
     _webui_profile_isolated_run_job._webui_profile_isolated = True
     _webui_profile_isolated_run_job._webui_original_run_job = original

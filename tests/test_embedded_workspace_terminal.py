@@ -29,7 +29,15 @@ def test_terminal_is_opened_by_slash_command_not_permanent_composer_icon():
     assert 'id="terminalSurface"' in html
     assert 'static/terminal.js' in html
     assert './static/terminal.js' in sw
-    assert "xterm@5.3.0" in html
+    # The pinned xterm version now lives in terminal.js, which fetches the
+    # library the first time a terminal is started, rather than in index.html
+    # which paid ~68 KiB gzipped for it on every page load.
+    terminal_js = _read("static/terminal.js")
+    assert "xterm/5.3.0" in terminal_js
+    assert "xterm/5.3.0" not in html, (
+        "xterm is eagerly referenced by index.html again — that undoes the "
+        "lazy load"
+    )
 
 
 def test_terminal_surface_uses_composer_flyout_card_pattern():

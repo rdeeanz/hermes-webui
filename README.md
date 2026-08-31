@@ -440,11 +440,15 @@ When WebUI reads shared Hermes Agent state, run the service as a user that can a
 The module maps directly onto existing WebUI environment variables, including:
 `HERMES_WEBUI_HOST`, `HERMES_WEBUI_PORT`, `HERMES_WEBUI_STATE_DIR`, `HERMES_HOME`, `HERMES_WEBUI_AGENT_DIR`, and `HERMES_WEBUI_PYTHON`.
 
-Set `environmentFiles` for secrets like API keys. Protected WebUI runtime keys from the module are rejected there, so keep host, port, state, and agent wiring in the module options. Keep reverse proxy and TLS configuration in your surrounding deployment module because those details are deployment-specific.
+Set `environmentFiles` for secrets like API keys. Protected WebUI runtime keys from the module are rejected there, so keep host, port, state, and agent wiring in the module options. Keep reverse proxy and TLS configuration in your surrounding deployment module because those details are deployment-specific — [`docs/reverse-proxy.md`](docs/reverse-proxy.md) has the nginx/Caddy blocks and the required SSE settings to adapt.
 
 ### Remote access (SSH tunnel, Tailscale, phone)
 
 The server binds to `127.0.0.1` by default. To reach it from another machine use an SSH tunnel (`ssh -N -L 8787:127.0.0.1:8787 user@host`, which `start.sh` prints for you over SSH), or join your server and phone to a [Tailscale](https://tailscale.com) network and browse to `http://<server-tailscale-ip>:8787` with `HERMES_WEBUI_HOST=0.0.0.0` + `HERMES_WEBUI_PASSWORD` set. Full walkthrough (incl. a community ARM64-Android field report): [`docs/remote-access.md`](docs/remote-access.md).
+
+### Public hostname with TLS (nginx / Caddy)
+
+For a real domain instead of a tunnel, see [`docs/reverse-proxy.md`](docs/reverse-proxy.md) — complete nginx and Caddy configs, the `TRUST_FORWARDED_*` variables and what each one fixes, subpath mounts, and the SSE buffering setting that otherwise makes streaming appear to hang. HTTPS is also a hard requirement for **Web Push**, PWA install on iOS, and passkeys: those features cannot work over plain HTTP on a public hostname.
 
 ### Manual launch (without start.sh)
 

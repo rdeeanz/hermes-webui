@@ -84,3 +84,67 @@ docs/ui-ux/review-shots/
 # Local WebUI runtime data and credentials
 .webui_password
 attachments/
+auth.json
+*.pem
+*.key
+!static/**/*.key
+secrets.json
+credentials.json
+
+# Tool caches and local test/lint artifacts
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+build/
+dist/
+
+# Editor/IDE local state
+.idea/
+.vscode/
+*.code-workspace
+.kiro/
+
+# ── Credentials not covered above ───────────────────────────────────────────
+# Registry auth tokens live in these two and are the easiest secret in a JS/Py
+# repo to commit by accident — this project has npm devDependencies and a
+# pyproject, so both are reachable.
+.npmrc
+.pypirc
+.netrc
+# TLS/signing material beyond the *.pem and *.key already ignored.
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+
+# ── Process output and local runtime state ──────────────────────────────────
+# server.py / ctl.sh write logs; `nohup ... &` drops nohup.out in the cwd.
+*.log
+nohup.out
+# HERMES_WEBUI_STATE_DIR can be pointed inside the repo while testing locally,
+# which is how a real session database ends up staged.
+.hermes/
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Merge and patch leftovers ──────────────────────────────────────────────
+*.orig
+*.rej
+
+# ── Performance audit artifacts ────────────────────────────────────────────
+# Lighthouse runs against a local server produce large JSON/HTML reports that
+# are measurements of one machine at one moment, not source.
+lighthouse-*.json
+lh-*.json
+*.report.html
+.lighthouseci/
